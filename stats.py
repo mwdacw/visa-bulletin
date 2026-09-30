@@ -17,6 +17,11 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(ROOT, "docs", "stats.json")
 PERM_DIR = os.path.join(ROOT, "data", "perm_pdfs")
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36"
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+}
 DATA_PAGE = "https://www.uscis.gov/tools/reports-and-studies/immigration-and-citizenship-data"
 U = "https://www.uscis.gov/sites/default/files/document/data/"
 BACKFILL = [U + f for f in [
@@ -54,7 +59,7 @@ MONTHS = {m: i + 1 for i, m in enumerate(["January", "February", "March", "April
 
 
 def get(url):
-    req = urllib.request.Request(url, headers={"User-Agent": UA})
+    req = urllib.request.Request(url, headers=HEADERS)
     return urllib.request.urlopen(req, timeout=60).read()
 
 
@@ -318,7 +323,7 @@ def discover():
         html = get(DATA_PAGE).decode("utf-8", "replace")
     except Exception as e:
         print("warning: USCIS data page:", e, file=sys.stderr)
-        return []
+        return None
     links = set()
     for href in re.findall(r'href="([^"]+\.(?:xlsx|pdf))"', html, re.I):
         url = href if href.startswith("http") else "https://www.uscis.gov" + href
@@ -334,7 +339,8 @@ def main():
     for k, v in [("i140_quarterly", {}), ("i140_src", {}), ("cob", {}), ("awaiting", {}), ("i485", {}), ("sources", [])]:
         stats.setdefault(k, v)
     changed = False
-    for url in BACKFILL + discover():
+    found = discover()
+    for url in BACKFILL + (found or []):
         if url in stats["sources"]:
             continue
         kind, fy, q = classify(url)
@@ -388,7 +394,9 @@ def main():
         print("stats updated", file=sys.stderr)
     else:
         print("stats unchanged", file=sys.stderr)
+    if found is None:  # could not look for new USCIS files; say so instead of passing quietly
+        return 1
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

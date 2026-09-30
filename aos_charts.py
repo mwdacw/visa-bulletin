@@ -13,6 +13,11 @@ OUT = os.path.join(ROOT, "docs", "aos_charts.json")
 PAGE = ("https://www.uscis.gov/green-card/green-card-processes-and-procedures/"
         "visa-availability-priority-dates/adjustment-of-status-filing-charts-from-the-visa-bulletin")
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36"
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+}
 MONTHS = {m: i + 1 for i, m in enumerate(["January", "February", "March", "April", "May", "June", "July",
                                           "August", "September", "October", "November", "December"])}
 # "For all employment-based preference categories, you must use the Final Action Dates chart ... for May 2026."
@@ -21,7 +26,7 @@ RULE = re.compile(r"employment-based[^.]{0,200}?(Dates for Filing|Final Action D
 
 
 def get(url):
-    req = urllib.request.Request(url, headers={"User-Agent": UA})
+    req = urllib.request.Request(url, headers=HEADERS)
     return urllib.request.urlopen(req, timeout=60).read().decode("utf-8", "replace")
 
 
