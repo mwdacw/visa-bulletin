@@ -114,7 +114,7 @@ function renderFilings(){
     {label:g=>'FY'+String(g.y).slice(2),short:g=>"'"+String(g.y).slice(2),title:g=>`Filed in FY${g.y}${g.y===C.years[C.years.length-1]?' (partial year)':''}`});
   // 8. filings by category per quarter (country of birth x subcategory)
   const cob=STATS.cob,cq=[];
-  {const ks=Object.keys(cob).filter(k=>/Q\d$/.test(k)).sort();if(ks.length){let{fy,q}=qParse(ks[0]);const L=qParse(ks[ks.length-1]);
+  {const ks=Object.keys(cob).filter(k=>/^FY\d{4}Q\d$/.test(k)).sort();if(ks.length){let{fy,q}=qParse(ks[0]);const L=qParse(ks[ks.length-1]);
     while(fy<L.fy||(fy===L.fy&&q<=L.q)){cq.push(`FY${fy}Q${q}`);q++;if(q>4){q=1;fy++}}}}
   const md=F.mode8,cr=AW_REGION[region]===region||region==='centralam'?region:'all';
   document.getElementById('f8-h').textContent=`${PR.name} ${md==='received'?'filings':'approvals'} by category per quarter · ${CNAME[region]}`;
@@ -124,8 +124,9 @@ function renderFilings(){
   legend('f8-lg',s8.map(x=>({label:x.name,color:x.color})));
   barChart(document.getElementById('f8'),cq.map(k=>({k,v:s8.map(x=>cob[k]?.[md]?.[cr]?.[x.k]??null)})),s8,
     {ref:null,aria:'I-140s by category per quarter',label:g=>qLabel(g.k),short:g=>`Q${qParse(g.k).q}'${String(qParse(g.k).fy).slice(2)}`,title:g=>qLong(g.k),fmt:fmtInt,yFmt:v=>v>=1000?(v/1000)+'k':v,
-     extra:g=>{if(!cob[g.k])return'<div class="d">Not published</div>';const v=cob[g.k][md]?.[cr];if(!v)return'';const tot=s8.reduce((a,x)=>a+(v[x.k]||0),0);
-       return F.pref==='EB2'&&tot?`<div class="r"><span>NIW share</span><span class="m">${(v.NIW/tot*100).toFixed(0)}%</span></div>`:''}});
+     extra:g=>{if(!cob[g.k])return'<div class="d">Not published</div>';const v=cob[g.k][md]?.[cr];if(!v)return`<div class="d">${md==='approved'?'Approvals':'Receipts'} not available for this quarter</div>`;const tot=s8.reduce((a,x)=>a+(v[x.k]||0),0);
+       return(F.pref==='EB2'&&tot?`<div class="r"><span>NIW share</span><span class="m">${(v.NIW/tot*100).toFixed(0)}%</span></div>`:'')+
+         (cob[g.k].derived?`<div class="d" style="margin-top:4px">Estimated: FY${cob[g.k].derived}. May be off by a few petitions.</div>`:'')}});
   // 6. PERM
   const P=perm.quarterly,pq=Object.keys(P);
   const s6=[{name:'Received',color:css('--c1')},{name:'Certified',color:css('--c3')}];

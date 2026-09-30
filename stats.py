@@ -31,7 +31,7 @@ BACKFILL = [U + f for f in [
     "I140_FY22_Q3.pdf", "I-140_FY23_Q1.pdf", "I-140_FY23_Q2.pdf", "i-140_fy23_q3.pdf",
     "i140_fy2024_q3.xlsx", "i140_fy2025_q1.xlsx", "i140_fy2025_q2.xlsx", "i140_fy2026_q2_v1.xlsx",
 ]]
-PARSER_VERSION = 2
+PARSER_VERSION = 3
 SUBS = ["E11", "E12", "E13", "E21", "NIW", "E31", "E32", "EW3", "total"]
 # Countries of birth summed into each visa-bulletin region; "row" is derived as the remainder.
 REGIONS = {"china": ["CHINA"], "india": ["INDIA"], "mexico": ["MEXICO"], "philippines": ["PHILIPPINES"],
@@ -103,10 +103,17 @@ def cob_rows(pairs):
 
 
 def period_of(title):
-    m = re.search(r"Fiscal Year (\d{4}) \((Q\d)(?:-Q4)?\)", title)
+    """'Fiscal Year 2026 (Q3)' -> FY2026Q3, '(Q1-Q4)' -> FY2026 (full year),
+    '(Q1-Q3)' -> FY2026YTDQ3 (year to date). Anything else -> None."""
+    m = re.search(r"Fiscal Year (\d{4}) \((Q\d)(?:-(Q\d))?\)", title)
     if not m:
         return None
-    return f"FY{m.group(1)}" if "Q1-Q4" in title else f"FY{m.group(1)}{m.group(2)}"
+    fy, a, b = m.groups()
+    if not b:
+        return f"FY{fy}{a}"
+    if a == "Q1":
+        return f"FY{fy}" if b == "Q4" else f"FY{fy}YTD{b}"
+    return None
 
 
 def parse_cob(blob, is_pdf):
@@ -128,6 +135,8 @@ def parse_cob(blob, is_pdf):
             rows = cob_rows(pairs)
             if rows and period:
                 res.setdefault(period, {})[kind] = rows
+            elif any(head in t for t in pages):
+                print(f"warning: {kind} country table skipped (period={period}, rows={bool(rows)})", file=sys.stderr)
     else:
         sheets, titles = rows_of(blob)
         for rows, title in zip(sheets, titles):
@@ -139,6 +148,8 @@ def parse_cob(blob, is_pdf):
             got = cob_rows(pairs)
             if got and period:
                 res.setdefault(period, {})[kind] = got
+            else:
+                print(f"warning: sheet {title} skipped (period={period}, rows={bool(got)})", file=sys.stderr)
     return res
 
 
@@ -275,6 +286,33 @@ def parse_perm(path):
     return quarters, as_of, remaining
 
 
+def derive_q4(cob, quarterly):
+    """Where USCIS published a full year and a Q1-Q3 year-to-date table but no Q4
+    file, Q4 = full year - Q1-Q3. The two tables were queried at different times,
+    so a result is kept only if it has no negatives and its all-country total is
+    within 2% of the quarterly case-status table (FY22 approvals fail this)."""
+    for key in [k for k in cob if re.fullmatch(r"FY\d{4}", k)]:
+        ytd, q4 = cob.get(key + "YTDQ3"), key + "Q4"
+        if not ytd or (q4 in cob and not cob[q4].get("derived")):
+            continue
+        out = {"derived": f"{key[2:]} full year minus Q1-Q3"}
+        for col, kind in enumerate(("received", "approved")):
+            full, part = cob[key].get(kind), ytd.get(kind)
+            if not full or not part:
+                continue
+            rows = {r: {s: v[s] - part.get(r, {}).get(s, 0) for s in v} for r, v in full.items()}
+            ref = quarterly.get(q4, {}).get("TOTAL", [None, None])[col]
+            got = rows["all"]["total"]
+            if any(min(v.values()) < 0 for v in rows.values()) or not ref or abs(got - ref) > 0.02 * ref:
+                print(f"note: {q4} {kind} not derivable (derived {got} vs quarterly table {ref})", file=sys.stderr)
+                continue
+            out[kind] = rows
+        if len(out) > 1:
+            cob[q4] = out
+        else:
+            cob.pop(q4, None)
+
+
 def discover():
     try:
         html = get(DATA_PAGE).decode("utf-8", "replace")
@@ -310,6 +348,8 @@ def main():
                         stats["i140_quarterly"][k] = v
                         stats["i140_src"][k] = [fy, q]
                 stats["cob"].update(parse_cob(blob, pdf))
+                if not any(k.startswith(f"FY{fy}Q") for k in stats["i140_quarterly"]):
+                    print(f"warning: no quarterly case-status rows parsed from {url}", file=sys.stderr)
             elif kind == "country":
                 if (fy, q) >= tuple(stats.get("i140_country", {}).get("fyq", (0, 0))):
                     stats["i140_country"] = {**parse_country(blob), "fyq": [fy, q], "label": f"FY{fy} Q{q}"}
@@ -324,6 +364,7 @@ def main():
         stats["sources"].append(url)
         changed = True
         print("parsed", kind, url.rsplit("/", 1)[-1], file=sys.stderr)
+    derive_q4(stats["cob"], stats["i140_quarterly"])
     perm, remaining = {}, {}
     for path in sorted(glob.glob(os.path.join(PERM_DIR, "*.pdf"))):
         quarters, as_of, rem = parse_perm(path)
