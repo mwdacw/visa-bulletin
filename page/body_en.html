@@ -11,6 +11,13 @@
 </header>
 <div class="toast" id="toast" hidden></div>
 
+<nav class="tabs" role="tablist" aria-label="Views">
+  <button role="tab" id="tb-dates" data-tab="dates" aria-selected="true" aria-controls="tab-dates">Priority dates</button>
+  <button role="tab" id="tb-filings" data-tab="filings" aria-selected="false" aria-controls="tab-filings">Filings &amp; approvals</button>
+</nav>
+
+<div class="tabpane" id="tab-dates" role="tabpanel">
+
 <div class="controls" role="toolbar">
   <div class="ctl"><span>Region</span>
     <select id="country" aria-label="Region">
@@ -67,4 +74,76 @@
 </details>
 
 <p class="note">Projections come from the visa-bulletin.us queue model, not from the State Department. Blank values are treated as Current (C); a few months may actually have been Unavailable (U). Before May 2022, EB-5 Unreserved uses the old Non-Regional Center category. EB-4 Religious Workers, EB-5 Infrastructure 2%, and the legacy Regional Center category are not shown. For reference only, not legal advice.</p>
+</div>
+
+<div class="tabpane" id="tab-filings" role="tabpanel" hidden>
+  <div class="controls" role="toolbar">
+    <div class="ctl"><span>Region</span>
+      <select id="f-country" aria-label="Region">
+        <option value="china">China (mainland born)</option>
+        <option value="india">India</option>
+        <option value="row">All Chargeability (ROW)</option>
+        <option value="mexico">Mexico</option>
+        <option value="philippines">Philippines</option>
+        <option value="centralam">El Salvador / Guatemala / Honduras</option>
+      </select></div>
+    <div class="ctl"><span>Petition type</span>
+      <select id="f-type" aria-label="Petition type"></select></div>
+  </div>
+
+  <div class="kpis" id="f-kpis"></div>
+
+  <section class="panel">
+    <h3 id="f1-h">I-140 petitions per quarter</h3>
+    <p class="sub">Petitions USCIS received, approved and denied in each fiscal-year quarter, all countries. Decisions in a quarter can be on petitions filed earlier.</p>
+    <div class="legend" id="f1-lg"></div>
+    <div class="chart" id="f1"></div>
+  </section>
+
+  <div class="grid2">
+    <section class="panel">
+      <h3>Approval rate per quarter</h3>
+      <p class="sub">Approved ÷ (approved + denied) among decisions that quarter.</p>
+      <div class="legend" id="f2-lg"></div>
+      <div class="chart" id="f2"></div>
+    </section>
+    <section class="panel">
+      <h3>Pending at quarter end</h3>
+      <p class="sub">I-140s still waiting for a USCIS decision.</p>
+      <div class="legend" id="f3-lg"></div>
+      <div class="chart" id="f3"></div>
+    </section>
+  </div>
+
+  <section class="panel">
+    <h3 id="f4-h">Approved I-140s waiting for a visa number</h3>
+    <p class="sub" id="f4-sub">Approved petitions whose priority date is not yet current, by preference. Primary applicants only; spouses and children add roughly one more person each.</p>
+    <div class="legend" id="f4-lg"></div>
+    <div class="chart" id="f4"></div>
+  </section>
+
+  <section class="panel">
+    <h3 id="f5-h">I-140s filed per fiscal year</h3>
+    <p class="sub" id="f5-sub">Counted by the year the petition was filed, with its status today, so recent years still have many pending cases.</p>
+    <div class="legend" id="f5-lg"></div>
+    <div class="chart" id="f5"></div>
+  </section>
+
+  <section class="panel">
+    <h3>PERM labor certifications per quarter</h3>
+    <p class="sub">Department of Labor applications received and certified, all countries. PERM comes before an EB-2 (non-NIW) or EB-3 I-140.</p>
+    <div class="legend" id="f6-lg"></div>
+    <div class="chart" id="f6"></div>
+    <div class="chiprow" id="f6-rem"></div>
+  </section>
+
+  <section class="panel">
+    <h3>Employment-based I-485 (green card applications inside the U.S.)</h3>
+    <p class="sub">All countries, per quarter.</p>
+    <div class="mini"><table id="f7"></table></div>
+  </section>
+
+  <p class="note" id="f-note">Sources: USCIS Immigration and Citizenship Data (I-140 by quarter and case status; I-140 receipts by country of birth; approved EB petitions awaiting visa availability; I-485 quarterly report) and DOL Office of Foreign Labor Certification PERM Selected Statistics. USCIS updates about two months after each quarter ends. For reference only, not legal advice.</p>
+</div>
+
 </div>

@@ -44,7 +44,7 @@ function lineChart(host,cfg){
   const iw=W-m.l-m.r,ih=H-m.t-m.b;
   const xs=cfg.lines.flatMap(l=>l.pts.map(p=>p[0]));const x0=Math.min(...xs),x1=Math.max(...xs)+1/12;
   let ys=cfg.lines.flatMap(l=>l.pts.map(p=>p[1]).filter(v=>v!=null));if(cfg.hline!=null)ys.push(cfg.hline);
-  let y0=Math.min(...ys),y1=Math.max(...ys);if(cfg.y0!=null)y0=Math.min(y0,cfg.y0);const pad=(y1-y0)*.06||1;y0-=cfg.y0!=null&&y0>=0?0:pad;y1+=pad;
+  let y0=Math.min(...ys),y1=Math.max(...ys);if(cfg.y0!=null)y0=Math.min(y0,cfg.y0);const pad=(y1-y0)*.06||1;y0-=cfg.y0!=null&&y0>=0?0:pad;y1+=pad;if(cfg.y1!=null)y1=Math.min(y1,cfg.y1);
   const X=v=>m.l+(v-x0)/(x1-x0)*iw,Y=v=>m.t+(1-(v-y0)/(y1-y0))*ih;
   const g=el('g',{},svg);
   const ystep=niceStep(y1-y0,W<560?5:9);
@@ -52,7 +52,7 @@ function lineChart(host,cfg){
     el('line',{x1:m.l,x2:W-m.r,y1:Y(v),y2:Y(v),stroke:css('--grid'),'stroke-width':1},g);
     const t=el('text',{x:m.l-8,y:Y(v)+4,'text-anchor':'end'},g);t.textContent=cfg.yFmt(v);
   }
-  const xstep=niceStep(x1-x0,W<560?4:9);
+  const xstep=Math.max(1,niceStep(x1-x0,W<560?4:9));
   for(let v=Math.ceil(x0/xstep)*xstep;v<=x1;v+=xstep){
     el('line',{x1:X(v),x2:X(v),y1:H-m.b,y2:H-m.b+4,stroke:css('--rule')},g);
     const t=el('text',{x:X(v),y:H-6,'text-anchor':'middle'},g);t.textContent=Math.round(v);
@@ -73,6 +73,7 @@ function lineChart(host,cfg){
     }
     if(l.step&&prev!=null&&!l.dash)d+=`H${X(l.pts[l.pts.length-1][0]+1/12)}`;
     el('path',{d,fill:'none',stroke:l.color,'stroke-width':2,'stroke-linejoin':'round','stroke-dasharray':l.dash?'5 4':'none',opacity:l.dash?.85:1},g);
+    if(l.markers)l.pts.forEach(p=>{if(p[1]!=null)el('circle',{cx:X(p[0]),cy:Y(p[1]),r:3,fill:l.color,stroke:css('--panel'),'stroke-width':1.5},g)});
     const last=[...l.pts].reverse().find(p=>p[1]!=null);
     if(last&&!l.dash)el('circle',{cx:X(last[0]),cy:Y(last[1]),r:4,fill:l.color,stroke:css('--panel'),'stroke-width':2},g);
   }
@@ -93,7 +94,7 @@ function lineChart(host,cfg){
       if(v!=null){dots[i].setAttribute('cx',X(best));dots[i].setAttribute('cy',Y(v));dots[i].setAttribute('visibility','visible')}else dots[i].setAttribute('visibility','hidden');
       rows.push(`<div class="r"><span><i class="sw" style="background:${l.color}"></i>${l.label}</span><span class="m">${cfg.tipFmt(v,l,best)}</span></div>`)});
     const yr=Math.floor(best+1e-6),mo=Math.round((best-yr)*12)+1;
-    tip.innerHTML=`<div style="margin-bottom:4px"><b>${MON[mo-1]} ${yr} bulletin</b></div>`+rows.join('');
+    tip.innerHTML=`<div style="margin-bottom:4px"><b>${cfg.head?cfg.head(best):MON[mo-1]+' '+yr+' bulletin'}</b></div>`+rows.join('');
     tip.hidden=false;const hw=host.clientWidth,tx=X(best)/W*hw;
     tip.style.left=(tx+14+tip.offsetWidth>hw?tx-14-tip.offsetWidth:tx+14)+'px';tip.style.top='8px';
   }
@@ -101,22 +102,23 @@ function lineChart(host,cfg){
   ov.addEventListener('pointermove',move);ov.addEventListener('pointerdown',move);ov.addEventListener('pointerleave',out);
 }
 
-function barChart(host,groups,series){
+function barChart(host,groups,series,o={}){
+  o={ref:12,aria:'Months advanced per year',label:g=>g.y,short:g=>"'"+String(g.y).slice(2),title:g=>`Oct ${g.y-1} → Oct ${g.y}`,fmt:v=>fmtNum(v)+' mo',yFmt:v=>v,extra:()=>'',...o};
   host.innerHTML='';
   const W=Math.max(300,host.clientWidth),H=W<560?220:260,m={l:W<560?40:48,r:12,t:12,b:26};
-  const svg=el('svg',{viewBox:`0 0 ${W} ${H}`,role:'img','aria-label':'Months advanced per year'},host);
+  const svg=el('svg',{viewBox:`0 0 ${W} ${H}`,role:'img','aria-label':o.aria},host);
   const iw=W-m.l-m.r,ih=H-m.t-m.b,n=series.length;
-  const vals=groups.flatMap(g=>g.v.filter(v=>v!=null));let y0=Math.min(0,...vals),y1=Math.max(12,...vals);const st=niceStep(y1-y0,5);y0=Math.floor(y0/st)*st;y1=Math.ceil(y1/st)*st;
+  const vals=groups.flatMap(g=>g.v.filter(v=>v!=null));let y0=Math.min(0,...vals),y1=Math.max(o.ref||1,...vals);const st=niceStep(y1-y0,5);y0=Math.floor(y0/st)*st;y1=Math.ceil(y1/st)*st;
   const Y=v=>m.t+(1-(v-y0)/(y1-y0))*ih;
-  for(let v=y0;v<=y1+1e-9;v+=st){el('line',{x1:m.l,x2:W-m.r,y1:Y(v),y2:Y(v),stroke:v===0?css('--ink-3'):css('--grid')},svg);const t=el('text',{x:m.l-8,y:Y(v)+4,'text-anchor':'end'},svg);t.textContent=v}
-  el('line',{x1:m.l,x2:W-m.r,y1:Y(12),y2:Y(12),stroke:css('--ink-3'),'stroke-dasharray':'3 3'},svg);
+  for(let v=y0;v<=y1+1e-9;v+=st){el('line',{x1:m.l,x2:W-m.r,y1:Y(v),y2:Y(v),stroke:v===0?css('--ink-3'):css('--grid')},svg);const t=el('text',{x:m.l-8,y:Y(v)+4,'text-anchor':'end'},svg);t.textContent=o.yFmt(v)}
+  if(o.ref!=null)el('line',{x1:m.l,x2:W-m.r,y1:Y(o.ref),y2:Y(o.ref),stroke:css('--ink-3'),'stroke-dasharray':'3 3'},svg);
   const bw=iw/Math.max(1,groups.length),gap=2,barW=Math.max(2,Math.min(18,(bw*0.8-(n-1)*gap)/n));
   const tip=document.createElement('div');tip.className='tip';tip.hidden=true;host.appendChild(tip);
   const every=Math.ceil(groups.length/(W<560?7:16));
   const hits=[];
   groups.forEach((g,gi)=>{
     const cx=m.l+bw*gi+bw/2,x0=cx-(n*barW+(n-1)*gap)/2;
-    if(gi%every===0){const t=el('text',{x:cx,y:H-6,'text-anchor':'middle'},svg);t.textContent=W<560?"'"+String(g.y).slice(2):g.y}
+    if(gi%every===0){const t=el('text',{x:cx,y:H-6,'text-anchor':'middle'},svg);t.textContent=W<560?o.short(g):o.label(g)}
     g.v.forEach((v,i)=>{if(v==null)return;const x=x0+i*(barW+gap),top=Math.min(Y(v),Y(0)),h=Math.max(1,Math.abs(Y(v)-Y(0)));
       const r=Math.min(3,h/2,barW/2);
       const d=v>=0?`M${x},${Y(0)}V${top+r}Q${x},${top} ${x+r},${top}H${x+barW-r}Q${x+barW},${top} ${x+barW},${top+r}V${Y(0)}Z`
@@ -126,7 +128,7 @@ function barChart(host,groups,series){
   });
   hits.forEach(([g,cx])=>{
     const hit=el('rect',{x:cx-bw/2,y:m.t,width:bw,height:ih,fill:'transparent'},svg);
-    const show=()=>{tip.innerHTML=`<div style="margin-bottom:4px"><b>Oct ${g.y-1} → Oct ${g.y}</b></div>`+series.map((s,i)=>`<div class="r"><span><i class="sw" style="background:${s.color}"></i>${s.name}</span><span class="m">${g.v[i]==null?'—':fmtNum(g.v[i])+' mo'}</span></div>`).join('');
+    const show=()=>{tip.innerHTML=`<div style="margin-bottom:4px"><b>${o.title(g)}</b></div>`+series.map((s,i)=>`<div class="r"><span><i class="sw" style="background:${s.color}"></i>${s.name}</span><span class="m">${g.v[i]==null?'—':o.fmt(g.v[i])}</span></div>`).join('')+o.extra(g);
       tip.hidden=false;const hw=host.clientWidth,tx=cx/W*hw;tip.style.left=(tx+14+tip.offsetWidth>hw?tx-14-tip.offsetWidth:tx+14)+'px';tip.style.top='8px';hit.setAttribute('fill',css('--grid'));hit.setAttribute('fill-opacity','.5')};
     hit.addEventListener('pointerenter',show);hit.addEventListener('pointerdown',show);
     hit.addEventListener('pointerleave',()=>{tip.hidden=true;hit.setAttribute('fill','transparent')});
