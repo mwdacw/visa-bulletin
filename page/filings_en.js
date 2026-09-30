@@ -11,7 +11,7 @@ const AW_CATS=[['eb1','EB-1','--c3'],['eb2','EB-2','--c1'],['eb3','EB-3','--c2']
 const AW_REGION={china:'china',india:'india',mexico:'mexico',philippines:'philippines',row:'row',centralam:'row'};
 const COB={china:'china',india:'india',philippines:'philippines'};
 let STATS=typeof STATS0!=='undefined'?STATS0:null;
-const F={type:'NIW',pref:'EB2',mode8:'received'};
+const F={type:'NIW',pref:'EB2',pref9:'ALL',mode8:'received'};
 const PREFS={EB1:{name:'EB-1',subs:[['E11','EB-1A','--c1'],['E12','EB-1B','--c3'],['E13','EB-1C','--c7']]},
   EB2:{name:'EB-2',subs:[['E21','PERM (E21)','--c1'],['NIW','NIW','--c3']]},
   EB3:{name:'EB-3',subs:[['E31','Skilled','--c1'],['E32','Professional','--c3'],['EW3','Other workers','--c7']]}};
@@ -32,7 +32,7 @@ function stackChart(host,groups,series,o){
   const svg=el('svg',{viewBox:`0 0 ${W} ${H}`,role:'img','aria-label':'Stacked bars'},host);
   const iw=W-m.l-m.r,ih=H-m.t-m.b;
   const tot=g=>g.v.reduce((a,v)=>a+(v||0),0);
-  let y1=Math.max(1,...groups.map(tot));const st=niceStep(y1,5);y1=Math.ceil(y1/st)*st;
+  let y1=Math.max(1,...groups.map(g=>Math.max(tot(g),g.total||0)));const st=niceStep(y1,5);y1=Math.ceil(y1/st)*st;
   const Y=v=>m.t+(1-v/y1)*ih;
   for(let v=0;v<=y1+1e-9;v+=st){el('line',{x1:m.l,x2:W-m.r,y1:Y(v),y2:Y(v),stroke:v===0?css('--ink-3'):css('--grid')},svg);const t=el('text',{x:m.l-8,y:Y(v)+4,'text-anchor':'end'},svg);t.textContent=v>=1000?(v/1000)+'k':v}
   const bw=iw/Math.max(1,groups.length),barW=Math.max(4,Math.min(34,bw*0.62));
@@ -47,12 +47,15 @@ function stackChart(host,groups,series,o){
       el('path',{d:`M${x},${yb}V${top+r}Q${x},${top} ${x+r},${top}H${x+barW-r}Q${x+barW},${top} ${x+barW},${top+r}V${yb}Z`,fill:series[i].color},svg)});
     hits.push([g,cx]);
   });
+  if(o.line){const pts=hits.map(([g,cx])=>[cx,Y(g.total??tot(g))]);
+    el('path',{d:pts.map((p,i)=>(i?'L':'M')+p[0]+','+p[1]).join(''),fill:'none',stroke:o.line.color,'stroke-width':2,'stroke-linejoin':'round'},svg);
+    pts.forEach(p=>el('circle',{cx:p[0],cy:p[1],r:3.5,fill:o.line.color,stroke:css('--panel'),'stroke-width':1.5},svg))}
   hits.forEach(([g,cx])=>{
     const hit=el('rect',{x:cx-bw/2,y:m.t,width:bw,height:ih,fill:'transparent'},svg);
     const t=tot(g);
     const show=()=>{tip.innerHTML=`<div style="margin-bottom:4px"><b>${o.title(g)}</b></div>`+
       [...series.map((x,i)=>[x,i])].reverse().map(([x,i])=>`<div class="r"><span><i class="sw" style="background:${x.color}"></i>${x.name}</span><span class="m">${fmtInt(g.v[i])}${t&&g.v[i]!=null?` <span style="color:var(--ink-3)">${(g.v[i]/t*100).toFixed(0)}%</span>`:''}</span></div>`).join('')+
-      `<div class="r" style="border-top:1px solid var(--rule);margin-top:4px;padding-top:4px"><span>Total filed</span><span class="m">${fmtInt(g.total??t)}</span></div>`;
+      `<div class="r" style="border-top:1px solid var(--rule);margin-top:4px;padding-top:4px"><span>${o.totalLabel||'Total'}</span><span class="m">${fmtInt(g.total??t)}</span></div>`+(o.extra?o.extra(g):'');
       tip.hidden=false;const hw=host.clientWidth,tx=cx/W*hw;tip.style.left=(tx+14+tip.offsetWidth>hw?tx-14-tip.offsetWidth:tx+14)+'px';tip.style.top='8px';hit.setAttribute('fill',css('--grid'));hit.setAttribute('fill-opacity','.5')};
     hit.addEventListener('pointerenter',show);hit.addEventListener('pointerdown',show);
     hit.addEventListener('pointerleave',()=>{tip.hidden=true;hit.setAttribute('fill','transparent')});
@@ -102,23 +105,33 @@ function renderFilings(){
     .filter(l=>l.pts.some(p=>p[1]));
   legend('f4-lg',l4.map(l=>({label:l.label,color:l.color})));
   lineChart(document.getElementById('f4'),{label:'Approved petitions awaiting a visa',lines:l4,y0:0,yFmt:v=>v>=1000?Math.round(v/1000)+'k':String(Math.round(v)),head:awHead,tipFmt:fmtInt});
-  // 5. I-140s filed per FY by country of birth, stacked by status
-  const PR=PREFS[F.pref];
-  const C=STATS.i140_country,cKey=COB[region]||'all',cc=C.countries[cKey],e=cc[F.pref]||{};
-  document.getElementById('f5-h').textContent=`${PR.name} I-140s filed per fiscal year · ${cKey==='all'?'all countries':CNAME[region]}`;
-  document.getElementById('f5-sub').textContent=(cKey==='all'?`USCIS publishes this table only for all countries and the top five (India, China, Philippines, Brazil, Vietnam), so ${CNAME[region]} shows all countries. `:'')+
-    `Each bar is every petition filed that year, split by where it stands as of ${C.label}: approved (by category), denied, or still pending. FY${C.years[C.years.length-1]} is a partial year.`;
-  const s5=[...PR.subs.map(([k,n,c])=>({k,name:'Approved · '+n,color:css(c)})),{k:'denied',name:'Denied',color:css('--c2')},{k:'pending',name:'Pending',color:css('--pend')}];
-  legend('f5-lg',s5.map(x=>({label:x.name,color:x.color})));
-  stackChart(document.getElementById('f5'),C.years.map((y,i)=>({y,v:s5.map(x=>x.k==='denied'||x.k==='pending'?e[x.k]?.[i]??null:e.sub?.[x.k]?.[i]??null),total:e.total?.[i]})),s5,
-    {label:g=>'FY'+String(g.y).slice(2),short:g=>"'"+String(g.y).slice(2),title:g=>`Filed in FY${g.y}${g.y===C.years[C.years.length-1]?' (partial year)':''}`});
+  // 5. I-140s filed per FY by country of birth: EB-1/2/3 stacked, with the yearly total
+  const C=STATS.i140_country,cKey=COB[region]||'all',cc=C.countries[cKey],lastY=C.years[C.years.length-1];
+  const who=cKey==='all'?'all countries':CNAME[region];
+  const allNote=cKey==='all'?`USCIS publishes this table only for all countries and the top five (India, China, Philippines, Brazil, Vietnam), so ${CNAME[region]} shows all countries. `:'';
+  document.getElementById('f5-h').textContent=`I-140s filed per fiscal year · ${who}`;
+  document.getElementById('f5-sub').textContent=allNote+`Counted by the fiscal year the petition was filed (October to September). FY${lastY} covers ${C.label.split(' ')[1].replace('Q','Q1–Q')} only.`;
+  const s5=[['EB1','EB-1','--c3'],['EB2','EB-2','--c1'],['EB3','EB-3','--c2']].map(([k,n,c])=>({k,name:n,color:css(c)}));
+  legend('f5-lg',[...s5.map(x=>({label:x.name,color:x.color,band:true})),{label:'Yearly total',color:css('--c7')}]);
+  stackChart(document.getElementById('f5'),C.years.map((y,i)=>({y,v:s5.map(x=>cc[x.k]?.total?.[i]??null),total:cc.ALL?.total?.[i]})),s5,
+    {line:{color:css('--c7')},label:g=>'FY'+String(g.y).slice(2),short:g=>"'"+String(g.y).slice(2),title:g=>`Filed in FY${g.y}${g.y===lastY?' (partial year)':''}`,totalLabel:'Total filed'});
+  // 9. status today of the petitions filed each year
+  const P9=F.pref9,e9=cc[P9]||{},n9=P9==='ALL'?'I-140':PREFS[P9].name;
+  document.getElementById('f9-h').textContent=`${n9} petitions filed each year: where they stand today · ${who}`;
+  document.getElementById('f9-sub').textContent=`Same petitions as above, split by their status as of ${C.label}. Recent years have more pending because USCIS has not decided them yet.`;
+  const s9=[{k:'approved',name:'Approved',color:css('--good')},{k:'denied',name:'Denied',color:css('--bad')},{k:'pending',name:'Still pending',color:css('--pend')}];
+  legend('f9-lg',s9.map(x=>({label:x.name,color:x.color,band:true})));
+  stackChart(document.getElementById('f9'),C.years.map((y,i)=>({y,i,v:s9.map(x=>e9[x.k]?.[i]??null),total:e9.total?.[i]})),s9,
+    {label:g=>'FY'+String(g.y).slice(2),short:g=>"'"+String(g.y).slice(2),title:g=>`${n9}s filed in FY${g.y}${g.y===lastY?' (partial year)':''}`,totalLabel:'Total filed',
+     extra:g=>P9==='EB2'&&e9.sub?`<div class="d" style="margin-top:4px">Of the approved: PERM (E21) ${fmtInt(e9.sub.E21?.[g.i])} · NIW ${fmtInt(e9.sub.NIW?.[g.i])}</div>`:''});
   // 8. filings by category per quarter (country of birth x subcategory)
   const cob=STATS.cob,cq=[];
   {const ks=Object.keys(cob).filter(k=>/^FY\d{4}Q\d$/.test(k)).sort();if(ks.length){let{fy,q}=qParse(ks[0]);const L=qParse(ks[ks.length-1]);
     while(fy<L.fy||(fy===L.fy&&q<=L.q)){cq.push(`FY${fy}Q${q}`);q++;if(q>4){q=1;fy++}}}}
   const md=F.mode8,cr=AW_REGION[region]===region||region==='centralam'?region:'all';
-  document.getElementById('f8-h').textContent=`${PR.name} ${md==='received'?'filings':'approvals'} by category per quarter · ${CNAME[region]}`;
-  document.getElementById('f8-sub').textContent=`I-140s ${md==='received'?'received':'approved'} each quarter, by beneficiary's country of birth. `+
+  const PR=PREFS[F.pref];
+  document.getElementById('f8-h').textContent=(F.pref==='EB2'?'EB-2: NIW vs PERM':`${PR.name} by category`)+`, ${md==='received'?'filed':'approved'} per quarter · ${CNAME[region]}`;
+  document.getElementById('f8-sub').textContent=`I-140s ${md==='received'?'filed':'approved'} in each quarter, by the beneficiary's country of birth. `+
     `Gaps are quarters whose files USCIS no longer publishes. `+(F.pref==='EB2'?'E21 is EB-2 with a PERM labor certification; NIW skips PERM.':'');
   const s8=PR.subs.map(([k,n,c])=>({k,name:n,color:css(c)}));
   legend('f8-lg',s8.map(x=>({label:x.name,color:x.color})));
@@ -154,9 +167,9 @@ function showTab(t){
 document.querySelector('nav.tabs').addEventListener('click',e=>{const b=e.target.closest('button[data-tab]');if(!b)return;
   try{history.replaceState(null,'','#'+b.dataset.tab)}catch(err){}showTab(b.dataset.tab)});
 document.getElementById('f-type').innerHTML=TYPES.map(t=>`<option value="${t.k}">${t.name}</option>`).join('');
-try{const s=JSON.parse(localStorage.getItem('ebdash-f')||'null');if(s&&TYPES.some(t=>t.k===s.type))F.type=s.type;if(s&&PREFS[s.pref])F.pref=s.pref;if(s&&['received','approved'].includes(s.mode8))F.mode8=s.mode8}catch(e){}
+try{const s=JSON.parse(localStorage.getItem('ebdash-f')||'null');if(s&&TYPES.some(t=>t.k===s.type))F.type=s.type;if(s&&PREFS[s.pref])F.pref=s.pref;if(s&&(PREFS[s.pref9]||s.pref9==='ALL'))F.pref9=s.pref9;if(s&&['received','approved'].includes(s.mode8))F.mode8=s.mode8}catch(e){}
 document.getElementById('f-type').value=F.type;
-fseg('f-pref','pref');fseg('f8-mode','mode8');
+fseg('f8-pref','pref');fseg('f8-mode','mode8');fseg('f9-pref','pref9');
 document.getElementById('f-type').addEventListener('change',e=>{F.type=e.target.value;try{localStorage.setItem('ebdash-f',JSON.stringify(F))}catch(err){}renderFilings()});
 function fseg(id,key){const g=document.getElementById(id);g.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===F[key]));
   g.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;F[key]=b.dataset.v;g.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b));try{localStorage.setItem('ebdash-f',JSON.stringify(F))}catch(err){}renderFilings()})}

@@ -97,12 +97,6 @@
       </select></div>
     <div class="ctl"><span>Petition type</span>
       <select id="f-type" aria-label="Petition type"></select></div>
-    <div class="ctl"><span>Breakdown</span>
-      <div class="seg" id="f-pref">
-        <button id="fp-EB1" data-v="EB1" aria-pressed="false">EB-1</button>
-        <button id="fp-EB2" data-v="EB2" aria-pressed="true">EB-2</button>
-        <button id="fp-EB3" data-v="EB3" aria-pressed="false">EB-3</button>
-      </div></div>
   </div>
 
   <div class="kpis" id="f-kpis"></div>
@@ -137,21 +131,41 @@
   </section>
 
   <section class="panel">
-    <h3 id="f8-h">EB-2 filings by track per quarter</h3>
-    <p class="sub" id="f8-sub"></p>
-    <div class="ctl" style="margin-bottom:6px"><div class="seg" id="f8-mode">
-      <button id="f8-r" data-v="received" aria-pressed="true">Received</button>
-      <button id="f8-a" data-v="approved" aria-pressed="false">Approved</button>
-    </div></div>
-    <div class="legend" id="f8-lg"></div>
-    <div class="chart" id="f8"></div>
+    <h3 id="f5-h">I-140s filed per fiscal year</h3>
+    <p class="sub" id="f5-sub"></p>
+    <div class="legend" id="f5-lg"></div>
+    <div class="chart" id="f5"></div>
   </section>
 
   <section class="panel">
-    <h3 id="f5-h">I-140s filed per fiscal year</h3>
-    <p class="sub" id="f5-sub">Counted by the year the petition was filed, with its status today, so recent years still have many pending cases.</p>
-    <div class="legend" id="f5-lg"></div>
-    <div class="chart" id="f5"></div>
+    <h3 id="f9-h">Where those petitions stand today</h3>
+    <p class="sub" id="f9-sub"></p>
+    <div class="chiprow" style="margin:4px 0 10px">
+      <div class="seg" id="f9-pref">
+        <button id="f9-ALL" data-v="ALL" aria-pressed="true">All</button>
+        <button id="f9-EB1" data-v="EB1" aria-pressed="false">EB-1</button>
+        <button id="f9-EB2" data-v="EB2" aria-pressed="false">EB-2</button>
+        <button id="f9-EB3" data-v="EB3" aria-pressed="false">EB-3</button>
+      </div></div>
+    <div class="legend" id="f9-lg"></div>
+    <div class="chart" id="f9"></div>
+  </section>
+
+  <section class="panel">
+    <h3 id="f8-h">EB-2 filings by track per quarter</h3>
+    <p class="sub" id="f8-sub"></p>
+    <div class="chiprow" style="margin:4px 0 10px">
+      <div class="seg" id="f8-pref">
+        <button id="f8-EB1" data-v="EB1" aria-pressed="false">EB-1</button>
+        <button id="f8-EB2" data-v="EB2" aria-pressed="true">EB-2</button>
+        <button id="f8-EB3" data-v="EB3" aria-pressed="false">EB-3</button>
+      </div>
+      <div class="seg" id="f8-mode">
+        <button id="f8-r" data-v="received" aria-pressed="true">Filed</button>
+        <button id="f8-a" data-v="approved" aria-pressed="false">Approved</button>
+      </div></div>
+    <div class="legend" id="f8-lg"></div>
+    <div class="chart" id="f8"></div>
   </section>
 
   <section class="panel">
