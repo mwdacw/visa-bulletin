@@ -1,0 +1,70 @@
+<div class="wrap">
+<header class="topbar">
+  <div>
+    <h1 id="h1">China Employment-Based Priority Dates</h1>
+    <p>Source: <a href="https://visa-bulletin.us/employment-based/" target="_blank" rel="noopener">visa-bulletin.us</a>, compiled from the U.S. State Department Visa Bulletin</p>
+  </div>
+  <div class="sync">
+    <button class="btn" id="refresh" type="button"><span class="spin" aria-hidden="true">↻</span><span id="refresh-t">Refresh data</span></button>
+    <small id="sync-s">Data: built-in snapshot</small>
+  </div>
+</header>
+<div class="toast" id="toast" hidden></div>
+
+<div class="controls" role="toolbar">
+  <div class="ctl"><span>Region</span>
+    <select id="country" aria-label="Region">
+      <option value="china">China (mainland born)</option>
+      <option value="india">India</option>
+      <option value="row">All Chargeability (ROW)</option>
+      <option value="mexico">Mexico</option>
+      <option value="philippines">Philippines</option>
+      <option value="centralam">El Salvador / Guatemala / Honduras</option>
+    </select></div>
+  <div class="ctl"><span>Chart</span>
+    <div class="seg" id="mode">
+      <button id="m-filing" data-v="filing" aria-pressed="true">Dates for Filing</button>
+      <button id="m-final" data-v="final_action" aria-pressed="false">Final Action</button>
+    </div></div>
+  <div class="ctl"><span>Range</span>
+    <div class="seg" id="range">
+      <button id="r-all" data-v="all" aria-pressed="true">All</button>
+      <button id="r-10" data-v="10" aria-pressed="false">10Y</button>
+      <button id="r-5" data-v="5" aria-pressed="false">5Y</button>
+      <button id="r-3" data-v="3" aria-pressed="false">3Y</button>
+    </div></div>
+  <div class="ctl" style="flex-basis:100%"><span>Categories</span><div class="chips" id="cats"></div></div>
+  <label class="chk"><input type="checkbox" id="proj" checked> Show model projection (to Oct 2028)</label>
+  <div class="ctl"><span>My priority date</span><input type="date" id="pd" value="2023-06-15" aria-label="My priority date"></div>
+</div>
+
+<div class="cards" id="cards"></div>
+
+<section class="panel">
+  <h3>Cutoff date by bulletin</h3>
+  <p class="sub">X axis: bulletin month. Y axis: the cutoff priority date in that bulletin. Steeper means faster movement; a drop is a retrogression. "C" (current) is plotted at the bulletin month itself.</p>
+  <div class="legend" id="lg1"></div>
+  <div class="chart" id="c1"></div>
+</section>
+
+<section class="panel">
+  <h3>Wait in line (bulletin month − cutoff)</h3>
+  <p class="sub">A backlog proxy: roughly how many years a case filed today would wait. A rising line means the cutoff is moving slower than the calendar and the backlog is growing.</p>
+  <div class="legend" id="lg2"></div>
+  <div class="chart" id="c2"></div>
+</section>
+
+<section class="panel">
+  <h3>Months advanced per year</h3>
+  <p class="sub">Each October bulletin (start of the fiscal year) compared with the previous October. 12 months means keeping pace with the calendar; negative values are retrogressions.</p>
+  <div class="legend" id="lg3"></div>
+  <div class="chart" id="c3"></div>
+</section>
+
+<details id="tbl-d">
+  <summary>Monthly data table</summary>
+  <div class="tbl"><table id="tbl"></table></div>
+</details>
+
+<p class="note">Projections come from the visa-bulletin.us queue model, not from the State Department. Blank values are treated as Current (C); a few months may actually have been Unavailable (U). Before May 2022, EB-5 Unreserved uses the old Non-Regional Center category. EB-4 Religious Workers, EB-5 Infrastructure 2%, and the legacy Regional Center category are not shown. For reference only, not legal advice.</p>
+</div>

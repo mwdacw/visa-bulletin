@@ -1,0 +1,38 @@
+name: Update visa bulletin data
+
+on:
+  schedule:
+    - cron: "17 15 * * *"   # daily, 15:17 UTC
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["page/**", "build.py", "scrape.py"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python scrape.py db
+      - run: python build.py
+      - name: Commit if changed
+        run: |
+          git add docs
+          if git diff --cached --quiet; then
+            echo "No changes."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+            git commit -m "Update data: $(python -c 'import json;print(json.load(open("docs/data.json"))["latest_bulletin"])')"
+            git push
+          fi

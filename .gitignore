@@ -1,0 +1,9 @@
+db/
+page/*.png
+page/eb-dashboard.html
+page/head2.html
+page/body2.html
+page/app2.js
+vb_data.json
+__pycache__/
+.DS_Store
