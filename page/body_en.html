@@ -89,6 +89,12 @@
       </select></div>
     <div class="ctl"><span>Petition type</span>
       <select id="f-type" aria-label="Petition type"></select></div>
+    <div class="ctl"><span>Breakdown</span>
+      <div class="seg" id="f-pref">
+        <button id="fp-EB1" data-v="EB1" aria-pressed="false">EB-1</button>
+        <button id="fp-EB2" data-v="EB2" aria-pressed="true">EB-2</button>
+        <button id="fp-EB3" data-v="EB3" aria-pressed="false">EB-3</button>
+      </div></div>
   </div>
 
   <div class="kpis" id="f-kpis"></div>
@@ -120,6 +126,17 @@
     <p class="sub" id="f4-sub">Approved petitions whose priority date is not yet current, by preference. Primary applicants only; spouses and children add roughly one more person each.</p>
     <div class="legend" id="f4-lg"></div>
     <div class="chart" id="f4"></div>
+  </section>
+
+  <section class="panel">
+    <h3 id="f8-h">EB-2 filings by track per quarter</h3>
+    <p class="sub" id="f8-sub"></p>
+    <div class="ctl" style="margin-bottom:6px"><div class="seg" id="f8-mode">
+      <button id="f8-r" data-v="received" aria-pressed="true">Received</button>
+      <button id="f8-a" data-v="approved" aria-pressed="false">Approved</button>
+    </div></div>
+    <div class="legend" id="f8-lg"></div>
+    <div class="chart" id="f8"></div>
   </section>
 
   <section class="panel">

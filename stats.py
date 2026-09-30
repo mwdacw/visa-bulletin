@@ -26,7 +26,16 @@ BACKFILL = [U + f for f in [
     "eb_i140_i360_i526_performancedata_fy2025_q2.xlsx", "eb_i140_i360_i526_performancedata_fy2025_q3.xlsx",
     "eb_i140_i360_i526_performancedata_fy2026_q2_v1.xlsx",
     "i485_performance_data_fy2025_q4_v1.xlsx", "i485_performance_data_fy2026_q2_v1.xlsx",
+    # Earlier quarters, for the country-of-birth x subcategory tables each quarter's file carries.
+    # (FY24 Q1-Q2, FY25 Q3 and FY26 Q1 are no longer on uscis.gov.)
+    "I140_FY22_Q3.pdf", "I-140_FY23_Q1.pdf", "I-140_FY23_Q2.pdf", "i-140_fy23_q3.pdf",
+    "i140_fy2024_q3.xlsx", "i140_fy2025_q1.xlsx", "i140_fy2025_q2.xlsx", "i140_fy2026_q2_v1.xlsx",
 ]]
+PARSER_VERSION = 2
+SUBS = ["E11", "E12", "E13", "E21", "NIW", "E31", "E32", "EW3", "total"]
+# Countries of birth summed into each visa-bulletin region; "row" is derived as the remainder.
+REGIONS = {"china": ["CHINA"], "india": ["INDIA"], "mexico": ["MEXICO"], "philippines": ["PHILIPPINES"],
+           "centralam": ["EL SALVADOR", "GUATEMALA", "HONDURAS"]}
 # Which report a file is, from its name.
 KINDS = [
     ("awaiting", re.compile(r"eb_i140_i360_i526_performancedata_fy(\d{4})_q(\d)", re.I)),
@@ -70,6 +79,67 @@ def classify(url):
 def rows_of(blob):
     ws = openpyxl.load_workbook(io.BytesIO(blob), data_only=True, read_only=True).worksheets
     return [[list(r) for r in s.iter_rows(values_only=True)] for s in ws], [s.title for s in ws]
+
+
+def cob_rows(pairs):
+    """Sum country-of-birth rows (name, [E11..EW3, total]) into regions."""
+    by = {}
+    for name, vals in pairs:
+        key = re.sub(r"\s+", " ", str(name)).strip().upper()
+        if key in ("GRAND TOTAL", "TOTAL"):
+            key = "ALL"
+        by[key] = [num(v) for v in vals[:9]]
+    if "ALL" not in by:
+        return None
+    out = {"all": dict(zip(SUBS, by["ALL"]))}
+    rest = list(by["ALL"])
+    for region, names in REGIONS.items():
+        tot = [sum(by.get(n, [0] * 9)[i] for n in names) for i in range(9)]
+        out[region] = dict(zip(SUBS, tot))
+        if region != "centralam":
+            rest = [a - b for a, b in zip(rest, tot)]
+    out["row"] = dict(zip(SUBS, rest))
+    return out
+
+
+def period_of(title):
+    m = re.search(r"Fiscal Year (\d{4}) \((Q\d)(?:-Q4)?\)", title)
+    if not m:
+        return None
+    return f"FY{m.group(1)}" if "Q1-Q4" in title else f"FY{m.group(1)}{m.group(2)}"
+
+
+def parse_cob(blob, is_pdf):
+    """Receipts and approvals by country of birth and subcategory, for the file's period."""
+    res = {}
+    if is_pdf:
+        pages = [p.extract_text() for p in PdfReader(io.BytesIO(blob)).pages]
+        for kind, head in [("received", "Receipts by Beneficiary Country of Birth"),
+                           ("approved", "Approvals by Beneficiary Country of Birth")]:
+            pairs, period = [], None
+            for t in pages:
+                if head not in t:
+                    continue
+                period = period or period_of(re.sub(r"\s+", " ", t))
+                for line in t.splitlines():
+                    m = re.match(r"\s*(Grand Total|Total|TOTAL|[A-Z][A-Z ,.'()-]+?)\s+((?:[\d,]+|-)(?:\s+(?:[\d,]+|-)){8,})\s*$", line)
+                    if m:
+                        pairs.append((m.group(1), m.group(2).split()))
+            rows = cob_rows(pairs)
+            if rows and period:
+                res.setdefault(period, {})[kind] = rows
+    else:
+        sheets, titles = rows_of(blob)
+        for rows, title in zip(sheets, titles):
+            kind = {"Rec-COB": "received", "App-COB": "approved"}.get(title.replace("_", "-"))
+            if not kind:
+                continue
+            period = period_of(" ".join(str(r[0] or "") for r in rows[:4]))
+            pairs = [(r[0], r[1:10]) for r in rows if r[0] and isinstance(r[1], (int, float))]
+            got = cob_rows(pairs)
+            if got and period:
+                res.setdefault(period, {})[kind] = got
+    return res
 
 
 def parse_i140(blob, fy, is_pdf):
@@ -221,7 +291,9 @@ def discover():
 
 def main():
     stats = json.load(open(OUT)) if os.path.exists(OUT) else {}
-    for k, v in [("i140_quarterly", {}), ("awaiting", {}), ("i485", {}), ("sources", [])]:
+    if stats.get("parser_version") != PARSER_VERSION:  # re-read every file with the new parser
+        stats = {"parser_version": PARSER_VERSION}
+    for k, v in [("i140_quarterly", {}), ("i140_src", {}), ("cob", {}), ("awaiting", {}), ("i485", {}), ("sources", [])]:
         stats.setdefault(k, v)
     changed = False
     for url in BACKFILL + discover():
@@ -231,7 +303,13 @@ def main():
         try:
             blob = get(url)
             if kind == "i140":
-                stats["i140_quarterly"].update(parse_i140(blob, fy, url.lower().endswith(".pdf")))
+                pdf = url.lower().endswith(".pdf")
+                # A later file restates earlier quarters of its fiscal year; keep the newest figures.
+                for k, v in parse_i140(blob, fy, pdf).items():
+                    if [fy, q] >= stats["i140_src"].get(k, [0, 0]):
+                        stats["i140_quarterly"][k] = v
+                        stats["i140_src"][k] = [fy, q]
+                stats["cob"].update(parse_cob(blob, pdf))
             elif kind == "country":
                 if (fy, q) >= tuple(stats.get("i140_country", {}).get("fyq", (0, 0))):
                     stats["i140_country"] = {**parse_country(blob), "fyq": [fy, q], "label": f"FY{fy} Q{q}"}
@@ -255,7 +333,7 @@ def main():
     if new_perm != stats.get("perm"):
         stats["perm"] = new_perm
         changed = True
-    for k in ["i140_quarterly", "awaiting", "i485"]:
+    for k in ["i140_quarterly", "cob", "awaiting", "i485"]:
         stats[k] = dict(sorted(stats[k].items()))
     if changed or "updated_at" not in stats:
         stats["updated_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())

@@ -11,7 +11,10 @@ const AW_CATS=[['eb1','EB-1','--c3'],['eb2','EB-2','--c1'],['eb3','EB-3','--c2']
 const AW_REGION={china:'china',india:'india',mexico:'mexico',philippines:'philippines',row:'row',centralam:'row'};
 const COB={china:'china',india:'india',philippines:'philippines'};
 let STATS=typeof STATS0!=='undefined'?STATS0:null;
-const F={type:'NIW'};
+const F={type:'NIW',pref:'EB2',mode8:'received'};
+const PREFS={EB1:{name:'EB-1',subs:[['E11','EB-1A','--c1'],['E12','EB-1B','--c3'],['E13','EB-1C','--c7']]},
+  EB2:{name:'EB-2',subs:[['E21','PERM (E21)','--c1'],['NIW','NIW','--c3']]},
+  EB3:{name:'EB-3',subs:[['E31','Skilled','--c1'],['E32','Professional','--c3'],['EW3','Other workers','--c7']]}};
 const fmtInt=v=>v==null?'—':Math.round(v).toLocaleString('en-US');
 const qParse=k=>{const m=/FY(\d{4})Q(\d)/.exec(k);return{fy:+m[1],q:+m[2]}};
 // Quarter start as a calendar number (FY2024 Q1 starts Oct 2023).
@@ -21,6 +24,40 @@ const qLong=k=>{const{fy,q}=qParse(k);const s=9+3*(q-1),a=new Date(fy-1,s,1),b=n
   return`FY${fy} Q${q} (${MON[a.getMonth()]} ${a.getFullYear()} – ${MON[b.getMonth()]} ${b.getFullYear()})`};
 const rate=v=>v&&(v[1]+v[2])?v[1]/(v[1]+v[2])*100:null;
 const monthX=m=>mnum(m);
+
+// Stacked bars: each group's segments sit on top of each other, 2px surface gap between them.
+function stackChart(host,groups,series,o){
+  host.innerHTML='';
+  const W=Math.max(300,host.clientWidth),H=W<560?240:280,m={l:W<560?40:48,r:12,t:12,b:26};
+  const svg=el('svg',{viewBox:`0 0 ${W} ${H}`,role:'img','aria-label':'Stacked bars'},host);
+  const iw=W-m.l-m.r,ih=H-m.t-m.b;
+  const tot=g=>g.v.reduce((a,v)=>a+(v||0),0);
+  let y1=Math.max(1,...groups.map(tot));const st=niceStep(y1,5);y1=Math.ceil(y1/st)*st;
+  const Y=v=>m.t+(1-v/y1)*ih;
+  for(let v=0;v<=y1+1e-9;v+=st){el('line',{x1:m.l,x2:W-m.r,y1:Y(v),y2:Y(v),stroke:v===0?css('--ink-3'):css('--grid')},svg);const t=el('text',{x:m.l-8,y:Y(v)+4,'text-anchor':'end'},svg);t.textContent=v>=1000?(v/1000)+'k':v}
+  const bw=iw/Math.max(1,groups.length),barW=Math.max(4,Math.min(34,bw*0.62));
+  const every=Math.ceil(groups.length/(W<560?7:16)),tip=document.createElement('div');tip.className='tip';tip.hidden=true;host.appendChild(tip);
+  const hits=[];
+  groups.forEach((g,gi)=>{
+    const cx=m.l+bw*gi+bw/2,x=cx-barW/2;let acc=0;
+    if(gi%every===0){const t=el('text',{x:cx,y:H-6,'text-anchor':'middle'},svg);t.textContent=W<560?o.short(g):o.label(g)}
+    const segs=g.v.map((v,i)=>[v,i]).filter(([v])=>v>0),last=segs.length-1;
+    segs.forEach(([v,i],j)=>{const yb=Y(acc),yt=Y(acc+v);acc+=v;const h=Math.max(0,yb-yt-(j<last?2:0)),top=yb-h;
+      if(h<=0)return;const r=j===last?Math.min(3,h,barW/2):0;
+      el('path',{d:`M${x},${yb}V${top+r}Q${x},${top} ${x+r},${top}H${x+barW-r}Q${x+barW},${top} ${x+barW},${top+r}V${yb}Z`,fill:series[i].color},svg)});
+    hits.push([g,cx]);
+  });
+  hits.forEach(([g,cx])=>{
+    const hit=el('rect',{x:cx-bw/2,y:m.t,width:bw,height:ih,fill:'transparent'},svg);
+    const t=tot(g);
+    const show=()=>{tip.innerHTML=`<div style="margin-bottom:4px"><b>${o.title(g)}</b></div>`+
+      [...series.map((x,i)=>[x,i])].reverse().map(([x,i])=>`<div class="r"><span><i class="sw" style="background:${x.color}"></i>${x.name}</span><span class="m">${fmtInt(g.v[i])}${t&&g.v[i]!=null?` <span style="color:var(--ink-3)">${(g.v[i]/t*100).toFixed(0)}%</span>`:''}</span></div>`).join('')+
+      `<div class="r" style="border-top:1px solid var(--rule);margin-top:4px;padding-top:4px"><span>Total filed</span><span class="m">${fmtInt(g.total??t)}</span></div>`;
+      tip.hidden=false;const hw=host.clientWidth,tx=cx/W*hw;tip.style.left=(tx+14+tip.offsetWidth>hw?tx-14-tip.offsetWidth:tx+14)+'px';tip.style.top='8px';hit.setAttribute('fill',css('--grid'));hit.setAttribute('fill-opacity','.5')};
+    hit.addEventListener('pointerenter',show);hit.addEventListener('pointerdown',show);
+    hit.addEventListener('pointerleave',()=>{tip.hidden=true;hit.setAttribute('fill','transparent')});
+  });
+}
 
 function kpi(k,v,d){return`<div class="kpi"><div class="k">${k}</div><div class="v">${v}</div><div class="d">${d||''}</div></div>`}
 
@@ -65,17 +102,30 @@ function renderFilings(){
     .filter(l=>l.pts.some(p=>p[1]));
   legend('f4-lg',l4.map(l=>({label:l.label,color:l.color})));
   lineChart(document.getElementById('f4'),{label:'Approved petitions awaiting a visa',lines:l4,y0:0,yFmt:v=>v>=1000?Math.round(v/1000)+'k':String(Math.round(v)),head:awHead,tipFmt:fmtInt});
-  // 5. I-140s filed per FY by country of birth
-  const C=STATS.i140_country,cKey=COB[region]||'all',cc=C.countries[cKey];
-  document.getElementById('f5-h').textContent=`I-140s filed per fiscal year · ${cKey==='all'?'all countries':CNAME[region]}`;
+  // 5. I-140s filed per FY by country of birth, stacked by status
+  const PR=PREFS[F.pref];
+  const C=STATS.i140_country,cKey=COB[region]||'all',cc=C.countries[cKey],e=cc[F.pref]||{};
+  document.getElementById('f5-h').textContent=`${PR.name} I-140s filed per fiscal year · ${cKey==='all'?'all countries':CNAME[region]}`;
   document.getElementById('f5-sub').textContent=(cKey==='all'?`USCIS publishes this table only for all countries and the top five (India, China, Philippines, Brazil, Vietnam), so ${CNAME[region]} shows all countries. `:'')+
-    `Counted by the year the petition was filed, with its status as of ${C.label}, so recent years still have many pending cases. FY${C.years[C.years.length-1]} is a partial year.`;
-  const s5=[['EB1','EB-1','--c3'],['EB2','EB-2','--c1'],['EB3','EB-3','--c2']].map(([k,n,c])=>({k,name:n,color:css(c)}));
-  legend('f5-lg',s5.map(s=>({label:s.name,color:s.color})));
-  barChart(document.getElementById('f5'),C.years.map((y,i)=>({y,i,v:s5.map(s=>cc[s.k]?.total?.[i]??null)})),s5,
-    {ref:null,aria:'I-140s filed per fiscal year',label:g=>'FY'+String(g.y).slice(2),short:g=>"'"+String(g.y).slice(2),title:g=>`Filed in FY${g.y}${g.y===C.years[C.years.length-1]?' (partial)':''}`,fmt:fmtInt,yFmt:v=>v>=1000?(v/1000)+'k':v,
-     extra:g=>s5.map(s=>{const e=cc[s.k];if(!e)return'';const niw=s.k==='EB2'&&e.sub?.NIW?` · NIW approved ${fmtInt(e.sub.NIW[g.i])}`:'';
-       return`<div class="d" style="margin-top:4px">${s.name}: ${fmtInt(e.approved?.[g.i])} approved · ${fmtInt(e.denied?.[g.i])} denied · ${fmtInt(e.pending?.[g.i])} pending${niw}</div>`}).join('')});
+    `Each bar is every petition filed that year, split by where it stands as of ${C.label}: approved (by category), denied, or still pending. FY${C.years[C.years.length-1]} is a partial year.`;
+  const s5=[...PR.subs.map(([k,n,c])=>({k,name:'Approved · '+n,color:css(c)})),{k:'denied',name:'Denied',color:css('--c2')},{k:'pending',name:'Pending',color:css('--pend')}];
+  legend('f5-lg',s5.map(x=>({label:x.name,color:x.color})));
+  stackChart(document.getElementById('f5'),C.years.map((y,i)=>({y,v:s5.map(x=>x.k==='denied'||x.k==='pending'?e[x.k]?.[i]??null:e.sub?.[x.k]?.[i]??null),total:e.total?.[i]})),s5,
+    {label:g=>'FY'+String(g.y).slice(2),short:g=>"'"+String(g.y).slice(2),title:g=>`Filed in FY${g.y}${g.y===C.years[C.years.length-1]?' (partial year)':''}`});
+  // 8. filings by category per quarter (country of birth x subcategory)
+  const cob=STATS.cob,cq=[];
+  {const ks=Object.keys(cob).filter(k=>/Q\d$/.test(k)).sort();if(ks.length){let{fy,q}=qParse(ks[0]);const L=qParse(ks[ks.length-1]);
+    while(fy<L.fy||(fy===L.fy&&q<=L.q)){cq.push(`FY${fy}Q${q}`);q++;if(q>4){q=1;fy++}}}}
+  const md=F.mode8,cr=AW_REGION[region]===region||region==='centralam'?region:'all';
+  document.getElementById('f8-h').textContent=`${PR.name} ${md==='received'?'filings':'approvals'} by category per quarter · ${CNAME[region]}`;
+  document.getElementById('f8-sub').textContent=`I-140s ${md==='received'?'received':'approved'} each quarter, by beneficiary's country of birth. `+
+    `Gaps are quarters whose files USCIS no longer publishes. `+(F.pref==='EB2'?'E21 is EB-2 with a PERM labor certification; NIW skips PERM.':'');
+  const s8=PR.subs.map(([k,n,c])=>({k,name:n,color:css(c)}));
+  legend('f8-lg',s8.map(x=>({label:x.name,color:x.color})));
+  barChart(document.getElementById('f8'),cq.map(k=>({k,v:s8.map(x=>cob[k]?.[md]?.[cr]?.[x.k]??null)})),s8,
+    {ref:null,aria:'I-140s by category per quarter',label:g=>qLabel(g.k),short:g=>`Q${qParse(g.k).q}'${String(qParse(g.k).fy).slice(2)}`,title:g=>qLong(g.k),fmt:fmtInt,yFmt:v=>v>=1000?(v/1000)+'k':v,
+     extra:g=>{if(!cob[g.k])return'<div class="d">Not published</div>';const v=cob[g.k][md]?.[cr];if(!v)return'';const tot=s8.reduce((a,x)=>a+(v[x.k]||0),0);
+       return F.pref==='EB2'&&tot?`<div class="r"><span>NIW share</span><span class="m">${(v.NIW/tot*100).toFixed(0)}%</span></div>`:''}});
   // 6. PERM
   const P=perm.quarterly,pq=Object.keys(P);
   const s6=[{name:'Received',color:css('--c1')},{name:'Certified',color:css('--c3')}];
@@ -103,9 +153,12 @@ function showTab(t){
 document.querySelector('nav.tabs').addEventListener('click',e=>{const b=e.target.closest('button[data-tab]');if(!b)return;
   try{history.replaceState(null,'','#'+b.dataset.tab)}catch(err){}showTab(b.dataset.tab)});
 document.getElementById('f-type').innerHTML=TYPES.map(t=>`<option value="${t.k}">${t.name}</option>`).join('');
-try{const s=JSON.parse(localStorage.getItem('ebdash-f')||'null');if(s&&TYPES.some(t=>t.k===s.type))F.type=s.type}catch(e){}
+try{const s=JSON.parse(localStorage.getItem('ebdash-f')||'null');if(s&&TYPES.some(t=>t.k===s.type))F.type=s.type;if(s&&PREFS[s.pref])F.pref=s.pref;if(s&&['received','approved'].includes(s.mode8))F.mode8=s.mode8}catch(e){}
 document.getElementById('f-type').value=F.type;
+fseg('f-pref','pref');fseg('f8-mode','mode8');
 document.getElementById('f-type').addEventListener('change',e=>{F.type=e.target.value;try{localStorage.setItem('ebdash-f',JSON.stringify(F))}catch(err){}renderFilings()});
+function fseg(id,key){const g=document.getElementById(id);g.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===F[key]));
+  g.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;F[key]=b.dataset.v;g.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b));try{localStorage.setItem('ebdash-f',JSON.stringify(F))}catch(err){}renderFilings()})}
 document.getElementById('f-country').addEventListener('change',e=>{S.country=e.target.value;document.getElementById('country').value=S.country;save();renderFilings()});
 // The dates tab's own render/refresh also repaint this tab when it is visible.
 const _render=render;render=function(){if(!document.getElementById('tab-filings').hidden){renderFilings();return}_render()};
