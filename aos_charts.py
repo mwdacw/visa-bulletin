@@ -96,7 +96,11 @@ def match_dates(page_text, key):
 def main():
     data = json.load(open(OUT)) if os.path.exists(OUT) else {"months": {}}
     months = data["months"]
-    main_html = get(PAGE)
+    try:
+        main_html = get(PAGE)
+    except Exception as e:
+        print(f"warning: USCIS filing charts page: {e}; keeping previous data", file=sys.stderr)
+        sys.exit(1)
     changed = False
     for k, v in rules(text(main_html)).items():  # current and next month
         if months.get(k) != v:

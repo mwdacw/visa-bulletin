@@ -66,6 +66,7 @@ function kpi(k,v,d){return`<div class="kpi"><div class="k">${k}</div><div class=
 
 function renderFilings(){
   if(document.getElementById('tab-filings').hidden)return;
+  document.getElementById('h1').textContent=CNAME[S.country]+' Employment-Based Green Card Data';
   if(!STATS){document.getElementById('f-kpis').innerHTML='<div class="note">Filing statistics are not available in this copy.</div>';return}
   const T=TYPES.find(t=>t.k===F.type)||TYPES[0];
   const Q=STATS.i140_quarterly,qs=Object.keys(Q);const Lq=qs[qs.length-1],cur=Q[Lq][T.k],yAgo=Q[qs[qs.length-5]]?.[T.k];

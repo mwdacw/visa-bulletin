@@ -24,9 +24,16 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install openpyxl pypdf
-      - run: python scrape.py db
-      - run: python aos_charts.py
-      - run: python stats.py
+      # Each source may fail on its own (a site down or blocking); the others still publish.
+      - id: bulletin
+        continue-on-error: true
+        run: python scrape.py db
+      - id: aos
+        continue-on-error: true
+        run: python aos_charts.py
+      - id: stats
+        continue-on-error: true
+        run: python stats.py
       - run: python build.py
       - name: Commit if changed
         run: |
@@ -39,3 +46,8 @@ jobs:
             git commit -m "Update data: $(python -c 'import json;print(json.load(open("docs/data.json"))["latest_bulletin"])')"
             git push
           fi
+      - name: Flag failed sources
+        if: steps.bulletin.outcome == 'failure' || steps.aos.outcome == 'failure' || steps.stats.outcome == 'failure'
+        run: |
+          echo "::error::A data source failed (bulletin=${{ steps.bulletin.outcome }}, aos=${{ steps.aos.outcome }}, stats=${{ steps.stats.outcome }}). Other sources were still published."
+          exit 1

@@ -28,8 +28,8 @@ const fmtB=m=>{const[y,mo]=m.split('-');return MON[+mo-1]+' '+y};
 const fmtCut=(d)=>d==null?'C':d;
 
 // series for one category in current country/table: {all:[[m,d]], q:[[m,d]]}, null when absent
-function getCat(cat){
-  const tbl=SRC.countries[S.country]?.[S.mode]||[];const mp=new Map();let found=false;
+function getCat(cat,table=S.mode){
+  const tbl=SRC.countries[S.country]?.[table]||[];const mp=new Map();let found=false;
   for(const n of cat.src){const s=tbl.find(x=>x.n===n);if(!s)continue;found=true;s.m.forEach((m,i)=>mp.set(m,s.d[i]))}
   if(!found)return null;
   const all=[...mp.entries()].sort((a,b)=>a[0]<b[0]?-1:1);
@@ -153,14 +153,16 @@ function stats(s){
   const st=startMonth();let retro=0,prev=null;for(const[m,d]of s.g.all){const v=cutNum(m,d);if(m>=st&&prev!=null&&v<prev-1e-6)retro++;prev=v}
   let pdLine='';
   if(S.pd){const p=dnum(S.pd);
-    if(cur==null||p<cn){const use=AOS[L];
-      pdLine=S.mode==='filing'
-        ?(use==='final_action'?`<span class="pill a">Past this cutoff, but USCIS uses Final Action in ${fmtB(L)}</span>`:`<span class="pill ok">Can file I-485 now</span>`)
-        :`<span class="pill ok">Current for approval</span>`}
+    if(cur==null||p<cn)pdLine=`<span class="pill ok">${S.mode==='filing'?'Past this cutoff':'Current for approval'}</span>`;
     else{const gap=(p-cn)*12;const rate=m36!=null?m36/36:null;const yrs=rate>0?gap/rate/12:null;
       pdLine=`<span class="pill no">${gap.toFixed(0)} months to go</span>`+(yrs?` <span class="d">≈ ${yrs.toFixed(1)} yrs at 3-yr pace</span>`:'')}}
+  // Whether an I-485 can be filed depends on the chart USCIS designated, not the one on screen.
+  let aosLine='';const use=AOS[L];
+  if(S.pd&&use){const g2=getCat(s,use),m2=g2&&new Map(g2.all);
+    if(m2&&m2.has(L)){const c2=m2.get(L),ok=c2==null||dnum(S.pd)<cutNum(L,c2),chart=use==='filing'?'Dates for Filing':'Final Action';
+      aosLine=`<div class="d" style="margin-top:4px">${ok?'<b>Can file I-485</b>':'Cannot file I-485 yet'} in ${fmtB(L)}: USCIS uses ${chart} (${c2==null?'C':c2}).</div>`}}
   return `<div class="card"><h2><i class="sw" style="background:${s.color}"></i>${s.full}</h2><div class="stats">
-   <div class="stat"><div class="k">${fmtB(L)} cutoff</div><div class="v">${cur==null?'C (current)':cur}</div><div>${pdLine}</div></div>
+   <div class="stat"><div class="k">${fmtB(L)} cutoff</div><div class="v">${cur==null?'C (current)':cur}</div><div>${pdLine}</div>${aosLine}</div>
    <div class="stat"><div class="k">Wait in line</div><div class="v">${wait.toFixed(1)} yrs</div><div class="d">bulletin month − cutoff</div></div>
    <div class="stat"><div class="k">Advance, last 12 mo</div><div class="v">${m12==null?'—':fmtNum(m12,0)+' mo'}</div><div class="d">vs ${fmtB(monthAdd(L,-12))}</div></div>
    <div class="stat"><div class="k">Avg per year, last 3 yrs</div><div class="v">${m36==null?'—':(m36/3).toFixed(1)+' mo'}</div><div class="d">${retro} retrogression${retro===1?'':'s'} in range</div></div>

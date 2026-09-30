@@ -367,7 +367,11 @@ def main():
     derive_q4(stats["cob"], stats["i140_quarterly"])
     perm, remaining = {}, {}
     for path in sorted(glob.glob(os.path.join(PERM_DIR, "*.pdf"))):
-        quarters, as_of, rem = parse_perm(path)
+        try:
+            quarters, as_of, rem = parse_perm(path)
+        except Exception as e:
+            print(f"warning: {os.path.basename(path)}: {e}", file=sys.stderr)
+            continue
         perm.update(quarters)
         remaining[as_of] = rem
     new_perm = {"quarterly": perm, "remaining": remaining}
