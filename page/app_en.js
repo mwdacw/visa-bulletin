@@ -12,6 +12,10 @@ const CATS=[
 ];
 const CNAME={china:'China',india:'India',row:'All Chargeability (ROW)',mexico:'Mexico',philippines:'Philippines',centralam:'El Salvador / Guatemala / Honduras'};
 let SRC={latest:BASE.latest_bulletin,fetched:BASE.fetched_at,countries:BASE.countries};
+// Which chart USCIS designated for employment-based I-485 filing each month ('filing' = Chart B).
+let AOS=(typeof AOS0!=='undefined'&&AOS0&&AOS0.months)||{};
+function aosBands(){const ks=Object.keys(AOS).filter(k=>AOS[k]==='filing').sort(),out=[];
+  for(const k of ks){const a=mnum(k);const last=out[out.length-1];if(last&&Math.abs(last[1]-a)<1e-6)last[1]=a+1/12;else out.push([a,a+1/12])}return out}
 const mnum=m=>{const[y,mo]=m.split('-').map(Number);return y+(mo-1)/12};
 const dnum=d=>{if(!d)return null;const[y,m,dd]=d.split('-').map(Number);return y+(m-1)/12+(dd-1)/365.25};
 const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
@@ -47,6 +51,7 @@ function lineChart(host,cfg){
   let y0=Math.min(...ys),y1=Math.max(...ys);if(cfg.y0!=null)y0=Math.min(y0,cfg.y0);const pad=(y1-y0)*.06||1;y0-=cfg.y0!=null&&y0>=0?0:pad;y1+=pad;if(cfg.y1!=null)y1=Math.min(y1,cfg.y1);
   const X=v=>m.l+(v-x0)/(x1-x0)*iw,Y=v=>m.t+(1-(v-y0)/(y1-y0))*ih;
   const g=el('g',{},svg);
+  if(cfg.bands)for(const[a,b]of cfg.bands){const l=Math.max(a,x0),r=Math.min(b,x1);if(r>l)el('rect',{x:X(l),y:m.t,width:X(r)-X(l),height:ih,fill:css('--band')},g)}
   const ystep=niceStep(y1-y0,W<560?5:9);
   for(let v=Math.ceil(y0/ystep)*ystep;v<=y1;v+=ystep){
     el('line',{x1:m.l,x2:W-m.r,y1:Y(v),y2:Y(v),stroke:css('--grid'),'stroke-width':1},g);
@@ -135,7 +140,7 @@ function barChart(host,groups,series,o={}){
   });
 }
 
-function legend(id,items){document.getElementById(id).innerHTML=items.map(i=>`<span><i class="${i.dash?'lg-dash':'lg-line'}" style="border-color:${i.color}"></i>${i.label}</span>`).join('')}
+function legend(id,items){document.getElementById(id).innerHTML=items.map(i=>i.band?`<span><i class="sw" style="background:${i.color};width:14px"></i>${i.label}</span>`:`<span><i class="${i.dash?'lg-dash':'lg-line'}" style="border-color:${i.color}"></i>${i.label}</span>`).join('')}
 
 function stats(s){
   if(!s.g)return `<div class="card na"><h2><i class="sw" style="background:${s.color}"></i>${s.full}</h2><div class="note">No data for this category in this region's ${S.mode==='filing'?'Dates for Filing':'Final Action'} chart.</div></div>`;
@@ -148,7 +153,10 @@ function stats(s){
   const st=startMonth();let retro=0,prev=null;for(const[m,d]of s.g.all){const v=cutNum(m,d);if(m>=st&&prev!=null&&v<prev-1e-6)retro++;prev=v}
   let pdLine='';
   if(S.pd){const p=dnum(S.pd);
-    if(cur==null||p<cn)pdLine=`<span class="pill ok">${S.mode==='filing'?'Can file now':'Current for approval'}</span>`;
+    if(cur==null||p<cn){const use=AOS[L];
+      pdLine=S.mode==='filing'
+        ?(use==='final_action'?`<span class="pill a">Past this cutoff, but USCIS uses Final Action in ${fmtB(L)}</span>`:`<span class="pill ok">Can file I-485 now</span>`)
+        :`<span class="pill ok">Current for approval</span>`}
     else{const gap=(p-cn)*12;const rate=m36!=null?m36/36:null;const yrs=rate>0?gap/rate/12:null;
       pdLine=`<span class="pill no">${gap.toFixed(0)} months to go</span>`+(yrs?` <span class="d">≈ ${yrs.toFixed(1)} yrs at 3-yr pace</span>`:'')}}
   return `<div class="card"><h2><i class="sw" style="background:${s.color}"></i>${s.full}</h2><div class="stats">
@@ -163,10 +171,29 @@ function renderChips(){
   document.getElementById('cats').innerHTML=CATS.map(c=>`<button class="chip" type="button" id="cat-${c.k}" data-k="${c.k}" aria-pressed="${S.cats.includes(c.k)}"><i class="sw" style="background:var(${c.c})"></i>${c.name}</button>`).join('');
 }
 
+function renderAos(){
+  const box=document.getElementById('aos'),ks=Object.keys(AOS).sort();
+  if(!ks.length){box.hidden=true;return}
+  box.hidden=false;
+  const now=ks.filter(k=>k<=SRC.latest).pop(),next=ks.find(k=>k>SRC.latest);
+  const pill=k=>AOS[k]==='filing'?'<span class="pill b">Chart B · Dates for Filing</span>':'<span class="pill a">Chart A · Final Action Dates</span>';
+  box.innerHTML=`<span class="lab">Employment-based I-485 filing</span>`+(now?`<span>${fmtB(now)}: ${pill(now)}</span>`:'')+(next?`<span>${fmtB(next)}: ${pill(next)}</span>`:'')+
+    `<span class="lab">USCIS decides each month which chart applies.</span>`;
+  // Fiscal-year calendar: Oct..Sep
+  const fys=[...new Set(ks.map(k=>{const[y,m]=k.split('-').map(Number);return m>=10?y+1:y}))].sort((a,b)=>b-a);
+  const order=[10,11,12,1,2,3,4,5,6,7,8,9];
+  document.getElementById('cal').innerHTML='<table><thead><tr><th></th>'+order.map(m=>`<th>${MON[m-1]}</th>`).join('')+'<th></th></tr></thead><tbody>'+
+    fys.map(fy=>{let n=0,t=0;const cells=order.map(m=>{const k=`${m>=10?fy-1:fy}-${String(m).padStart(2,'0')}`,v=AOS[k];
+        if(!v)return'<td class="c n"></td>';t++;if(v==='filing')n++;
+        return`<td class="c ${v==='filing'?'B':'A'}" title="${fmtB(k)}: ${v==='filing'?'Dates for Filing':'Final Action Dates'}">${v==='filing'?'B':'A'}</td>`}).join('');
+      return`<tr><td class="y">FY${fy}</td>${cells}<td class="cnt">${n}/${t} B</td></tr>`}).join('')+'</tbody></table>';
+}
+
 function render(){
   document.getElementById('h1').textContent=CNAME[S.country]+' Employment-Based Priority Dates';
   const st=startMonth(),L=SRC.latest;
   const ss=CATS.filter(c=>S.cats.includes(c.k)).map(c=>({...c,color:css(c.c),g:getCat(c)}));
+  renderAos();
   document.getElementById('cards').innerHTML=ss.length?ss.map(stats).join(''):'<div class="card"><div class="note">Select at least one category above.</div></div>';
   const live=ss.filter(s=>s.g);
   const pdv=S.pd?dnum(S.pd):null;
@@ -181,11 +208,12 @@ function render(){
   if(!live.length){['lg1','lg2','lg3'].forEach(i=>document.getElementById(i).innerHTML='<span>No categories to show</span>');document.getElementById('tbl').innerHTML='';return}
   const yf=v=>String(Math.round(v*12)/12%1===0?Math.round(v):v.toFixed(1));
   const df=v=>{const y=Math.floor(v+1e-9),r=(v-y)*12,mo=Math.floor(r+1e-6),d=Math.round((r-mo)*365.25/12)+1;return `${y}-${String(mo+1).padStart(2,'0')}-${String(Math.min(d,31)).padStart(2,'0')}`};
-  legend('lg1',[...l1.map(l=>({label:l.label,color:l.color,dash:l.dash})),...(pdv!=null?[{label:'My priority date',color:css('--pd'),dash:true}]:[])]);
-  lineChart(document.getElementById('c1'),{label:'Cutoff date trend',lines:l1,yFmt:yf,hline:pdv,nowX:hasProj?mnum(L):null,
+  const bands=aosBands(),bandLg=bands.length?[{label:'USCIS accepted Chart B',color:css('--band'),band:true}]:[];
+  legend('lg1',[...l1.map(l=>({label:l.label,color:l.color,dash:l.dash})),...(pdv!=null?[{label:'My priority date',color:css('--pd'),dash:true}]:[]),...bandLg]);
+  lineChart(document.getElementById('c1'),{label:'Cutoff date trend',lines:l1,bands,yFmt:yf,hline:pdv,nowX:hasProj?mnum(L):null,
     tipFmt:(v,l,x)=>{const r=l.raw&&l.raw.find(p=>Math.abs(mnum(p[0])-x)<1e-6);return r&&r[1]==null?'C':df(v)}});
-  legend('lg2',l2.map(l=>({label:l.label,color:l.color,dash:l.dash})));
-  lineChart(document.getElementById('c2'),{label:'Wait in line',lines:l2,y0:0,yFmt:v=>v.toFixed(0)+'y',nowX:hasProj?mnum(L):null,tipFmt:v=>v.toFixed(1)+' yrs'});
+  legend('lg2',[...l2.map(l=>({label:l.label,color:l.color,dash:l.dash})),...bandLg]);
+  lineChart(document.getElementById('c2'),{label:'Wait in line',lines:l2,bands,y0:0,yFmt:v=>v.toFixed(0)+'y',nowX:hasProj?mnum(L):null,tipFmt:v=>v.toFixed(1)+' yrs'});
   const maps=live.map(s=>new Map(s.g.all));const groups=[];
   const y0=+st.slice(0,4)+(st.slice(5)<='10'?1:2);
   for(let y=y0;y<=+L.slice(0,4);y++){const a=`${y-1}-10`,b=`${y}-10`;
@@ -244,7 +272,8 @@ document.getElementById('refresh').addEventListener('click',async e=>{
   if(window.claude?.use){try{DB=await window.claude.use('db')}catch(e){DB=null}}
   if(DB){try{await checkDb(false)}catch(e){}
     DB.doc('bulletin/meta').onSnapshot(s=>{if(s.exists&&s.data().fetched_at!==SRC.fetched)loadAll(s.data()).catch(()=>{})},()=>{});}
-  else if(location.protocol.startsWith('http'))checkSite(false);
+  else if(location.protocol.startsWith('http')){checkSite(false);
+    fetch('aos_charts.json?t='+Date.now(),{cache:'no-store'}).then(r=>r.ok?r.json():null).then(j=>{if(j&&j.months&&JSON.stringify(j.months)!==JSON.stringify(AOS)){AOS=j.months;render()}}).catch(()=>{})}
 })();
 
 // ---- controls ----

@@ -31,8 +31,10 @@ def main():
     base = json.dumps(current, separators=(",", ":"))
     stats_path = os.path.join(ROOT, "docs", "stats.json")
     stats = read(stats_path) if os.path.exists(stats_path) else "null"
+    aos_path = os.path.join(ROOT, "docs", "aos_charts.json")
+    aos = json.dumps(json.loads(read(aos_path)), separators=(",", ":")) if os.path.exists(aos_path) else "null"
     html = (read(os.path.join(PAGE, "head_en.html")) + read(os.path.join(PAGE, "body_en.html"))
-            + "<script>\nconst BASE=" + base + ";\nconst STATS0=" + stats.strip() + ";\n"
+            + "<script>\nconst BASE=" + base + ";\nconst STATS0=" + stats.strip() + ";\nconst AOS0=" + aos + ";\n"
             + read(os.path.join(PAGE, "app_en.js")) + "\n" + read(os.path.join(PAGE, "filings_en.js")) + "</script>\n")
     # The Artifact publisher adds its own skeleton; a plain website needs one.
     doc = ('<!doctype html><html lang="en"><head><meta charset="utf-8">'

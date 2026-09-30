@@ -5,7 +5,7 @@
 /* Layout: one column dashboard — controls row, two summary cards, three stacked charts, table. */
 :root{
   --bg:#f6f7f9; --panel:#ffffff; --ink:#111418; --ink-2:#4b5360; --ink-3:#7c8492;
-  --rule:#e2e5ea; --grid:#eceef2; --c1:#2a78d6; --c2:#eb6834; --c3:#1baf7a; --c4:#eda100; --c5:#e87ba4; --c6:#008300; --c7:#4a3aa7; --c8:#e34948; --pd:#111418; --pend:#b7bdc7;
+  --rule:#e2e5ea; --grid:#eceef2; --c1:#2a78d6; --c2:#eb6834; --c3:#1baf7a; --c4:#eda100; --c5:#e87ba4; --c6:#008300; --c7:#4a3aa7; --c8:#e34948; --pd:#111418; --pend:#b7bdc7; --band:#e6eefa;
   --good:#1a7f37; --bad:#c62828; --chip:#eef1f5;
   --f-display:"Source Serif 4",Georgia,serif;
   --f-body:"IBM Plex Sans",system-ui,-apple-system,sans-serif;
@@ -13,11 +13,11 @@
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#121417; --panel:#1b1e22; --ink:#f2f3f5; --ink-2:#b9bfc9; --ink-3:#8a919c;
-  --rule:#2c3036; --grid:#25292e; --c1:#3987e5; --c2:#d95926; --c3:#199e70; --c4:#c98500; --c5:#d55181; --c6:#008300; --c7:#9085e9; --c8:#e66767; --pd:#f2f3f5; --pend:#4a515b;
+  --rule:#2c3036; --grid:#25292e; --c1:#3987e5; --c2:#d95926; --c3:#199e70; --c4:#c98500; --c5:#d55181; --c6:#008300; --c7:#9085e9; --c8:#e66767; --pd:#f2f3f5; --pend:#4a515b; --band:#1c2736;
   --good:#4cc26a; --bad:#ef6b6b; --chip:#262a30; color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#121417; --panel:#1b1e22; --ink:#f2f3f5; --ink-2:#b9bfc9; --ink-3:#8a919c;
-  --rule:#2c3036; --grid:#25292e; --c1:#3987e5; --c2:#d95926; --c3:#199e70; --c4:#c98500; --c5:#d55181; --c6:#008300; --c7:#9085e9; --c8:#e66767; --pd:#f2f3f5; --pend:#4a515b;
+  --rule:#2c3036; --grid:#25292e; --c1:#3987e5; --c2:#d95926; --c3:#199e70; --c4:#c98500; --c5:#d55181; --c6:#008300; --c7:#9085e9; --c8:#e66767; --pd:#f2f3f5; --pend:#4a515b; --band:#1c2736;
   --good:#4cc26a; --bad:#ef6b6b; --chip:#262a30; color-scheme:dark}
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.55}
@@ -102,6 +102,17 @@ nav.tabs button:focus-visible{outline:2px solid var(--c1);outline-offset:-2px}
 .chiprow b{font-family:var(--f-mono);font-weight:600;color:var(--ink)}
 .mini{overflow-x:auto}
 .mini table td,.mini table th{font-size:12.5px}
+.aos{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;background:var(--panel);border:1px solid var(--rule);border-radius:10px;padding:12px 16px}
+.aos .lab{font-size:12px;color:var(--ink-3)}
+.pill.b{color:var(--c1);font-weight:500} .pill.a{color:var(--ink-2)}
+.cal{overflow-x:auto}
+.cal table{border-collapse:separate;border-spacing:3px;width:auto}
+.cal th,.cal td{border:0;padding:0;text-align:center;font-size:11.5px}
+.cal th{position:static;color:var(--ink-3);font-weight:500;padding:0 2px 2px}
+.cal td.y{text-align:right;padding-right:8px;color:var(--ink-2);font-family:var(--f-mono)}
+.cal td.c{width:34px;height:24px;border-radius:4px;font-family:var(--f-mono);font-weight:600}
+.cal td.B{background:var(--c1);color:#fff} .cal td.A{background:var(--chip);color:var(--ink-3)} .cal td.n{background:transparent}
+.cal td.cnt{padding-left:8px;color:var(--ink-2);text-align:left;font-family:var(--f-mono)}
 @media (max-width:520px){.sync{align-items:flex-start}.sync small{text-align:left}}
 @media (max-width:520px){header h1{font-size:21px}.stat .v{font-size:17px}}
 </style>
