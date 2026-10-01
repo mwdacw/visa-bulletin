@@ -12,4 +12,20 @@ Live site: https://mwdacw.github.io/visa-bulletin/
 - A GitHub Actions workflow refreshes the visa bulletin daily and commits only when the data changed. Run it by hand from the Actions tab ("Update visa bulletin data" → Run workflow).
 - uscis.gov blocks GitHub's runners, so `local_update.sh` runs `aos_charts.py` and `stats.py` daily from a Mac (macOS LaunchAgent) in a dedicated clone and pushes any changes.
 
+## Local USCIS sync (Mac)
+
+Needs `git`, [`uv`](https://docs.astral.sh/uv/) and the GitHub CLI logged in (`gh auth login`, plus `gh auth setup-git`).
+
+```sh
+./install_local_sync.sh             # install the daily 10:30 job and run it once
+tail -f ~/Library/Logs/visa-bulletin-sync.log
+./install_local_sync.sh uninstall   # remove it
+```
+
+The job works in its own clone (`~/Library/Application Support/visa-bulletin-sync`) and resets it to `origin/main` on every run, so it never touches your working copy. A run missed while the Mac sleeps happens on wake; a day the Mac is off is skipped.
+
+## Adding a PERM quarter
+
+When DOL posts a new *PERM Selected Statistics* PDF on its [performance data page](https://www.dol.gov/agencies/eta/foreign-labor/performance), save it into `data/perm_pdfs/` (keep DOL's file name), run `uv run --with openpyxl --with pypdf stats.py && uv run build.py`, and commit.
+
 For reference only, not legal advice.
