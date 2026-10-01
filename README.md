@@ -9,6 +9,7 @@ Live site: https://mwdacw.github.io/visa-bulletin/
 - `stats.py` collects USCIS I-140 / I-485 / awaiting-visa statistics into `docs/stats.json` (the "Filings & approvals" tab). USCIS only lists the newest quarter, so each new file is parsed once and merged into the history.
 - PERM figures come from DOL's PERM Selected Statistics PDFs in `data/perm_pdfs/`. dol.gov blocks scripted downloads, so add each new quarter's PDF there by hand.
 - `aos_charts.py` records which chart (Dates for Filing = Chart B, or Final Action) USCIS designated for employment-based I-485 filing each month since Oct 2015, from USCIS's Adjustment of Status Filing Charts page and its monthly archive (`docs/aos_charts.json`).
-- A GitHub Actions workflow runs these daily and commits only when the data changed. Run it by hand from the Actions tab ("Update visa bulletin data" → Run workflow).
+- A GitHub Actions workflow refreshes the visa bulletin daily and commits only when the data changed. Run it by hand from the Actions tab ("Update visa bulletin data" → Run workflow).
+- uscis.gov blocks GitHub's runners, so `local_update.sh` runs `aos_charts.py` and `stats.py` daily from a Mac (macOS LaunchAgent) in a dedicated clone and pushes any changes.
 
 For reference only, not legal advice.

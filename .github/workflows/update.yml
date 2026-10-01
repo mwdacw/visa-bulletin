@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ["page/**", "data/**", "build.py", "scrape.py", "stats.py", "aos_charts.py"]
+    paths: ["page/**", "build.py", "scrape.py"]
 
 permissions:
   contents: write
@@ -23,17 +23,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install openpyxl pypdf
-      # Each source may fail on its own (a site down or blocking); the others still publish.
+      # uscis.gov blocks GitHub's runners, so aos_charts.py and stats.py run from
+      # local_update.sh on a Mac instead; this job only refreshes the visa bulletin.
       - id: bulletin
         continue-on-error: true
         run: python scrape.py db
-      - id: aos
-        continue-on-error: true
-        run: python aos_charts.py
-      - id: stats
-        continue-on-error: true
-        run: python stats.py
       - run: python build.py
       - name: Commit if changed
         run: |
@@ -47,7 +41,7 @@ jobs:
             git push
           fi
       - name: Flag failed sources
-        if: steps.bulletin.outcome == 'failure' || steps.aos.outcome == 'failure' || steps.stats.outcome == 'failure'
+        if: steps.bulletin.outcome == 'failure'
         run: |
-          echo "::error::A data source failed (bulletin=${{ steps.bulletin.outcome }}, aos=${{ steps.aos.outcome }}, stats=${{ steps.stats.outcome }}). Other sources were still published."
+          echo "::error::visa-bulletin.us fetch failed; the previous data was kept."
           exit 1
