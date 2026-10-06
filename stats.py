@@ -35,6 +35,12 @@ BACKFILL = [U + f for f in [
     # (FY24 Q1-Q2, FY25 Q3 and FY26 Q1 are no longer on uscis.gov.)
     "I140_FY22_Q3.pdf", "I-140_FY23_Q1.pdf", "I-140_FY23_Q2.pdf", "i-140_fy23_q3.pdf",
     "i140_fy2024_q3.xlsx", "i140_fy2025_q1.xlsx", "i140_fy2025_q2.xlsx", "i140_fy2026_q2_v1.xlsx",
+    # Approvals per fiscal year by subcategory for the top ten countries of birth, FY2017-FY2021
+    # (FY2022 Q1-Q2 in it is skipped; the quarterly files give the full year).
+    "I140_app_by_country_FY2017-2022_Q1_Q2.pdf",
+    # Receipts by fiscal year filed and current status, FY2009-FY2019 (all countries, India, China);
+    # only the years before the newest country file's first year are used.
+    "I140_by_class_country_FY09_19.pdf",
 ]]
 PARSER_VERSION = 3
 SUBS = ["E11", "E12", "E13", "E21", "NIW", "E31", "E32", "EW3", "total"]
@@ -43,6 +49,8 @@ REGIONS = {"china": ["CHINA"], "india": ["INDIA"], "mexico": ["MEXICO"], "philip
            "centralam": ["EL SALVADOR", "GUATEMALA", "HONDURAS"]}
 # Which report a file is, from its name.
 KINDS = [
+    ("country_old", re.compile(r"i140_by_class_country_fy(\d{2})_(\d{2})", re.I)),
+    ("annual", re.compile(r"i140_app_by_country_fy\d{4}-(\d{4})_q(\d)", re.I)),
     ("awaiting", re.compile(r"eb_i140_i360_i526_performancedata_fy(\d{4})_q(\d)", re.I)),
     ("country", re.compile(r"i140_rec_by_class_country_fy(\d{4})_?\s*(?:%20)?q(\d)", re.I)),
     ("i485", re.compile(r"i485_performance_data_fy(\d{4})_q(\d)", re.I)),
@@ -158,6 +166,34 @@ def parse_cob(blob, is_pdf):
     return res
 
 
+def parse_annual(blob):
+    """Approvals per fiscal year by subcategory, for the top ten countries of birth each year.
+    Only complete years are kept, and a region only when all its countries are listed."""
+    text = "\n".join(p.extract_text(extraction_mode="layout") for p in PdfReader(io.BytesIO(blob)).pages)
+    years, fy = {}, None
+    for line in text.splitlines():
+        m = re.match(r"\s*(Fiscal Year (\d{4})(?: \(Q[\dQ-]+\))?|[A-Za-z][A-Za-z ,.'()-]+?)\s{2,}((?:[\d,]+\s+){8}[\d,]+)\s*$", line)
+        if not m:
+            continue
+        name, vals = m.group(1), m.group(3).split()
+        if m.group(2):
+            fy = f"FY{m.group(2)}" if name == f"Fiscal Year {m.group(2)}" else None  # partial year -> skip
+            if fy:
+                years[fy] = [("ALL", vals)]
+        elif fy and not name.upper().startswith(("REST OF", "TOTAL")):
+            years[fy].append((name, vals))
+    out = {}
+    for fy, pairs in years.items():
+        rows, listed = cob_rows(pairs), {re.sub(r"\s+", " ", n).strip().upper() for n, _ in pairs}
+        for region, names in REGIONS.items():
+            if not all(n in listed for n in names):
+                rows.pop(region)
+        if not all(n in listed for r, ns in REGIONS.items() if r != "centralam" for n in ns):
+            rows.pop("row")
+        out[fy] = {"approved": rows, "annual": True}
+    return out
+
+
 def parse_i140(blob, fy, is_pdf):
     """Per-quarter received/approved/denied/pending for one fiscal year."""
     found = {}
@@ -225,6 +261,67 @@ def parse_country(blob):
         if c:
             res["countries"][key] = c
     return res
+
+
+def parse_country_old(blob):
+    """The FY2009-2019 receipts-by-year file, one page per country, into parse_country's shape."""
+    res = {"countries": {}}
+    for page in PdfReader(io.BytesIO(blob)).pages:
+        text = page.extract_text(extraction_mode="layout")
+        who = re.search(r"Approval Status for (All Countries|\w+ Nationals)", re.sub(r"\s+", " ", text))
+        key = who and {"All Countries": "all", "Indian Nationals": "india", "Chinese Nationals": "china"}.get(who.group(1))
+        if not key:
+            continue
+        c, sec = {}, "ALL"
+        for line in text.splitlines():
+            flat = re.sub(r"\s+", "", line)
+            if flat.startswith("PetitionsbyEmployment"):
+                res["years"] = [int(y) for y in re.findall(r"\b(20\d\d)\b", line)]
+                continue
+            if flat.startswith("OtherandUnknown"):
+                break
+            pref = re.search(r"\((EB[123])\)", flat)
+            if pref:
+                sec = pref.group(1)
+                continue
+            m = re.match(r"\s*(\S.*?)\s{2,}((?:[\d,]+|-)(?:\s+(?:[\d,]+|-))*)\s*$", line)
+            if not m or "years" not in res or len(m.group(2).split()) < len(res["years"]):
+                continue
+            label, vals = re.sub(r"\s+", "", m.group(1)), [num(v) for v in m.group(2).split()[:len(res["years"])]]
+            code = re.search(r"\((E\d\d|EW3)\)", label)
+            if code:
+                c.setdefault(sec, {}).setdefault("sub", {})[code.group(1)] = vals
+            else:
+                field = {"TotalPetitions": "total", "Approved": "approved", "Denied": "denied"}.get(label) or (
+                    "pending" if label.startswith("Pending") else None)
+                if field:
+                    c.setdefault(sec, {})[field] = vals
+        res["countries"][key] = c
+    return res
+
+
+def backfill_country(stats):
+    """Prepend the years before the country file's first year from the FY2009-2019 file.
+    E21 there includes NIW, so NIW is left out (null) for those years."""
+    cur, old = stats.get("i140_country"), stats.get("i140_country_old")
+    if not cur or not old or not cur.get("years"):
+        return
+    add = [y for y in old["years"] if y < cur["years"][0]]
+    if not add:
+        return
+    idx = [old["years"].index(y) for y in add]
+    def pad(new, src):
+        return [None if src is None else src[i] for i in idx] + new
+    for key, c in cur["countries"].items():
+        oc = old["countries"].get(key, {})
+        for sec, d in c.items():
+            od = oc.get(sec, {})
+            for field in ("total", "approved", "denied", "pending"):
+                if field in d:
+                    d[field] = pad(d[field], od.get(field))
+            for code, v in d.get("sub", {}).items():
+                d["sub"][code] = pad(v, od.get("sub", {}).get(code))
+    cur["years"] = add + cur["years"]
 
 
 def parse_awaiting(blob):
@@ -356,6 +453,13 @@ def main():
                 stats["cob"].update(parse_cob(blob, pdf))
                 if not any(k.startswith(f"FY{fy}Q") for k in stats["i140_quarterly"]):
                     print(f"warning: no quarterly case-status rows parsed from {url}", file=sys.stderr)
+            elif kind == "annual":
+                # Full-year tables from the quarterly files take precedence.
+                for k, v in parse_annual(blob).items():
+                    if k not in stats["cob"]:
+                        stats["cob"][k] = v
+            elif kind == "country_old":
+                stats["i140_country_old"] = parse_country_old(blob)
             elif kind == "country":
                 if (fy, q) >= tuple(stats.get("i140_country", {}).get("fyq", (0, 0))):
                     stats["i140_country"] = {**parse_country(blob), "fyq": [fy, q], "label": f"FY{fy} Q{q}"}
@@ -371,6 +475,7 @@ def main():
         changed = True
         print("parsed", kind, url.rsplit("/", 1)[-1], file=sys.stderr)
     derive_q4(stats["cob"], stats["i140_quarterly"])
+    backfill_country(stats)
     perm, remaining = {}, {}
     for path in sorted(glob.glob(os.path.join(PERM_DIR, "*.pdf"))):
         try:
