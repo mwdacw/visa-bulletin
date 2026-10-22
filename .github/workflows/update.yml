@@ -2,7 +2,8 @@ name: Update visa bulletin data
 
 on:
   schedule:
-    - cron: "17 15 * * *"   # daily, 15:17 UTC
+    - cron: "17 15 * * *"         # daily, 15:17 UTC
+    - cron: "47 */3 8-31 * *"     # every 3 hours from the 8th, when the next bulletin comes out
   workflow_dispatch:
   push:
     branches: [main]

@@ -546,7 +546,15 @@ function render(){
 // ---- sync with the artifact database ----
 let DB=null;
 function fmtTime(iso){try{const d=new Date(iso);return d.toLocaleString('en-US',{year:'numeric',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}catch(e){return iso}}
-function syncLine(){document.getElementById('sync-s').textContent=`Data: ${fmtB(SRC.latest)} bulletin · updated ${fmtTime(SRC.fetched)}`}
+// When the site last looked for a new bulletin: the newest successful run of the update workflow
+// (GitHub's API is public and allows cross-site reads; data.json only changes when the bulletin does).
+let CHECKED=null;
+async function lastCheck(){
+  try{const r=await fetch('https://api.github.com/repos/mwdacw/visa-bulletin/actions/workflows/update.yml/runs?per_page=1&status=success',{cache:'no-store'});
+    if(r.ok){const run=(await r.json()).workflow_runs?.[0];if(run)CHECKED=run.updated_at}}catch(e){}
+  return CHECKED;
+}
+function syncLine(){document.getElementById('sync-s').textContent=`Data: ${fmtB(SRC.latest)} bulletin${SRC.prelim?' (preliminary)':''} · `+(CHECKED?`last checked ${fmtTime(CHECKED)}`:`updated ${fmtTime(SRC.fetched)}`)}
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>t.hidden=true,9000)}
 function expectedLatest(){const n=new Date();const cur=n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0');return n.getDate()>=15?monthAdd(cur,1):cur}
 async function loadAll(meta){
@@ -560,7 +568,9 @@ function applyData(meta,countries){SRC={latest:meta.latest_bulletin,fetched:meta
 function upToDate(){const exp=expectedLatest();
   if(SRC.latest>=exp)return `Up to date: ${fmtB(SRC.latest)} bulletin.`;
   return DB?`This is the newest data in the database (${fmtB(SRC.latest)} bulletin). The State Department usually publishes next month's bulletin mid-month. If the ${fmtB(exp)} bulletin is out, ask Claude to run ~/visa-bulletin/scrape.py to sync it.`
-           :`Up to date with the latest sync (${fmtB(SRC.latest)} bulletin). The site checks for a new bulletin every day; the ${fmtB(exp)} bulletin usually appears mid-month.`}
+           :`No newer bulletin yet${CHECKED?` as of the last check (${fmtTime(CHECKED)})`:''}. Showing the ${fmtB(SRC.latest)} bulletin. `+
+            (new Date().getDate()>=15?`The ${fmtB(exp)} bulletin is due; the site checks every 3 hours and will show it once our source has it.`
+                                     :`The site checks daily, and every 3 hours from the 8th; the ${fmtB(exp)} bulletin usually appears mid-month.`)}
 async function checkDb(manual){
   const m=await DB.doc('bulletin/meta').get();
   if(!m.exists){if(manual)toast('The synced database is empty. Showing the built-in snapshot.');return}
@@ -569,14 +579,45 @@ async function checkDb(manual){
     if(manual)toast(meta.latest_bulletin>was?`Updated to the ${fmtB(meta.latest_bulletin)} bulletin.`:`Loaded the latest synced data (${fmtB(meta.latest_bulletin)} bulletin).`)}
   else if(manual)toast(upToDate());
 }
+// A new bulletin can reach the public visa-bulletin-data dataset hours before our daily sync, and
+// raw.githubusercontent.com allows cross-site reads. Its newest month is added only if it follows our
+// latest month and every previous-month date it implies matches ours; our own sync replaces it later.
+const VBD='https://raw.githubusercontent.com/armanckeser/visa-bulletin-data/main/data/latest.json';
+const VBD_CAT={EB1:'EB-1: Priority Workers',EB2:'EB-2: Professionals with Advanced Degrees',EB3:'EB-3: Skilled Workers, Professionals',
+  EW:'EB-3: Other Workers',EB4:'EB-4: Special Immigrants',EB4_RW:'EB-4: Religious Workers',EB5_UNRESERVED_I5_R5:'EB-5: Unreserved',
+  EB5_RURAL:'EB-5: Rural (20%)',EB5_HIGH_UNEMPLOYMENT:'EB-5: High Unemployment (10%)',EB5_INFRASTRUCTURE:'EB-5: Infrastructure (2%)'};
+const VBD_CO={ROW:'row',CN:'china',IN:'india',MX:'mexico',PH:'philippines'},VBD_CH={dates_for_filing:'filing',final_action:'final_action'};
+async function checkDataset(){
+  let L;try{const r=await fetch(VBD,{cache:'no-store'});if(!r.ok)return false;L=await r.json()}catch(e){return false}
+  if(!L||!/^\d{4}-\d\d$/.test(L.bulletin||'')||L.bulletin<=SRC.latest||L.previous_bulletin!==SRC.latest||!Array.isArray(L.rows))return false;
+  const ch=new Map((L.changes||[]).map(c=>[c.chart+'|'+c.category+'|'+c.country,c]));
+  const next=structuredClone(SRC.countries);let n=0;
+  for(const r of L.rows){
+    const co=VBD_CO[r.country],t=VBD_CH[r.chart],name=VBD_CAT[r.category];
+    if(r.kind!=='employment'||!co||!t||!name)continue;
+    const sr=next[co]?.[t]?.find(x=>x.n===name);
+    if(!sr||sr.m[sr.m.length-1]!==L.previous_bulletin)return false;
+    const c=ch.get(r.chart+'|'+r.category+'|'+r.country),prev=(c?c.from:r.status==='date'?r.date:'')||null;
+    if(sr.d[sr.d.length-1]!==prev)return false;  // disagrees with our data: don't use it
+    sr.m.push(L.bulletin);sr.d.push(r.status==='date'?r.date:null);n++;
+  }
+  if(n<80)return false;  // 100 employment rows today; far fewer means the format changed
+  SRC={...SRC,latest:L.bulletin,countries:next,prelim:true};syncLine();render();
+  return true;
+}
 // On a regular website the data file sits next to the page.
 async function checkSite(manual){
-  let j;
+  let j;await lastCheck();syncLine();
   try{const r=await fetch('data.json?t='+Date.now(),{cache:'no-store'});if(!r.ok)throw 0;j=await r.json()}
   catch(e){if(manual)toast('Could not load newer data here. Showing the built-in snapshot.');return}
-  if(j.fetched_at!==SRC.fetched){const was=SRC.latest;applyData(j,j.countries);
-    if(manual)toast(j.latest_bulletin>was?`Updated to the ${fmtB(j.latest_bulletin)} bulletin.`:`Loaded the latest data (${fmtB(j.latest_bulletin)} bulletin).`)}
-  else if(manual)toast(upToDate());
+  const was=SRC.latest,changed=j.fetched_at!==SRC.fetched;
+  if(changed)applyData(j,j.countries);
+  if(SRC.latest<expectedLatest()&&await checkDataset()){
+    if(manual)toast(`Loaded the ${fmtB(SRC.latest)} bulletin from the public visa-bulletin-data dataset; its ${fmtB(was)} dates match ours. Marked preliminary until our next sync confirms it.`);return}
+  if(!manual)return;
+  if(SRC.latest>was)toast(`Updated to the ${fmtB(SRC.latest)} bulletin.`);
+  else if(changed)toast(`Loaded the latest data (${fmtB(SRC.latest)} bulletin).`);
+  else toast(upToDate()+(SRC.prelim?' (Preliminary, from the visa-bulletin-data dataset; our next sync confirms it.)':''));
 }
 const check=manual=>DB?checkDb(manual):checkSite(manual);
 document.getElementById('refresh').addEventListener('click',async e=>{
