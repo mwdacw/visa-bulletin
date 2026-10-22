@@ -21,7 +21,10 @@ def main():
     current = json.loads(read(DATA)) if os.path.exists(DATA) else None
     if os.path.exists(SCRAPED):
         fresh = json.loads(read(SCRAPED))
-        if current is None or fresh["countries"] != current["countries"]:
+        # A scrape older than the committed data (a stale local db/) must not replace it.
+        if current is not None and fresh.get("fetched_at", "") < current.get("fetched_at", ""):
+            print("local scrape is older than docs/data.json; keeping", current["latest_bulletin"])
+        elif current is None or fresh["countries"] != current["countries"]:
             with open(DATA, "w", encoding="utf-8") as f:
                 json.dump(fresh, f, separators=(",", ":"))
             current = fresh

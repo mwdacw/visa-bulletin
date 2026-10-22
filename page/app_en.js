@@ -94,8 +94,10 @@ function lineChart(host,cfg){
     const xv=x0+(px-m.l)/iw*(x1-x0);let best=months[0];for(const mm of months)if(Math.abs(mm+1/24-xv)<Math.abs(best+1/24-xv))best=mm;
     cross.setAttribute('x1',X(best));cross.setAttribute('x2',X(best));cross.setAttribute('visibility','visible');
     const rows=[];
+    // A projection starts at the latest real bulletin with the same date; list it only where it forecasts.
+    const real=new Set(cfg.lines.filter((l,i)=>!l.dash&&maps[i].get(best.toFixed(4))!==undefined).map(l=>l.color));
     cfg.lines.forEach((l,i)=>{const v=maps[i].get(best.toFixed(4));
-      if(v===undefined){dots[i].setAttribute('visibility','hidden');return}
+      if(v===undefined||l.dash&&real.has(l.color)){dots[i].setAttribute('visibility','hidden');return}
       if(v!=null){dots[i].setAttribute('cx',X(best));dots[i].setAttribute('cy',Y(v));dots[i].setAttribute('visibility','visible')}else dots[i].setAttribute('visibility','hidden');
       rows.push(`<div class="r"><span><i class="sw" style="background:${l.color}"></i>${l.label}</span><span class="m">${cfg.tipFmt(v,l,best)}</span></div>`)});
     const yr=Math.floor(best+1e-6),mo=Math.round((best-yr)*12)+1;
