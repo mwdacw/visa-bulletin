@@ -283,6 +283,7 @@ async function checkDataset(){
   for(const r of L.rows){
     const co=VBD_CO[r.country],t=VBD_CH[r.chart],name=VBD_CAT[r.category];
     if(r.kind!=='employment'||!co||!t||!name)continue;
+    if(r.status==='date'&&!/^\d{4}-\d\d-\d\d$/.test(r.date))return false;  // dates end up in innerHTML
     const sr=next[co]?.[t]?.find(x=>x.n===name);
     if(!sr||sr.m[sr.m.length-1]!==L.previous_bulletin)return false;
     const c=ch.get(r.chart+'|'+r.category+'|'+r.country),prev=(c?c.from:r.status==='date'?r.date:'')||null;
